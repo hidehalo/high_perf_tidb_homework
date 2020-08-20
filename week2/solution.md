@@ -4,7 +4,7 @@
 
 使用 sysbench、go-ycsb 和 go-tpc 分别对 TiDB 进行测试并且产出测试报告。测试报告需要包括以下内容：
 
-1.  部署环境的机器配置(CPU、内存、磁盘规格型号)，拓扑结构(TiDB、TiKV 各部署于哪些节点)
+1. 部署环境的机器配置(CPU、内存、磁盘规格型号)，拓扑结构(TiDB、TiKV 各部署于哪些节点)
 2. 调整过后的 TiDB 和 TiKV 配置
 3. 测试输出结果
     - 关键指标的监控截图
@@ -14,28 +14,28 @@
 
 写出你对该配置与拓扑环境和 workload 下 TiDB 集群负载的分析，提出你认为的 TiDB 的性能的瓶颈所在(能提出大致在哪个模块即 可)截止时间：下周二（8.25）24:00:00(逾期提交不给分)
 
-
 ## 1. 机器配置
 
-CPU 3.1 GHz 四核Intel Core i5
-内存 16 GB 1867 MHz DDR3
-磁盘规格型号 APPLE HDD HTS541010A9E662 1 TB 5400 RPM
+- CPU 3.1 GHz 四核Intel Core i5
+- 内存 16 GB 1867 MHz DDR3
+- 磁盘规格型号 APPLE HDD HTS541010A9E662 1 TB 5400 RPM
 
 ## 2. 拓扑结构
 
 本次测试一共使用了三台虚拟机，每台虚拟机分配了2048MB内存和1个虚拟CPU的上限，以下是服务器的网络拓扑结构
 
-* TiDB Server 192.168.99.101 (VM)
-* TiKV Server 192.168.99.102 (VM)
-* PD Server 192.168.99.103 (VM)
-* Prometheus Server 192.168.99.103 (VM)
-* Grafana Server 92.168.99.103 (VM)
-* Alertmanager Server 92.168.99.103 (VM)
+- TiDB Server 192.168.99.101 (VM)
+- TiKV Server 192.168.99.102 (VM)
+- PD Server 192.168.99.103 (VM)
+- Prometheus Server 192.168.99.103 (VM)
+- Grafana Server 92.168.99.103 (VM)
+- Alertmanager Server 92.168.99.103 (VM)
 
 ```bash
 tiup cluster deploy tidb-cluster-1 v4.0.0  topo.yaml -u root -p
 ```
-# Sysbench
+
+## Sysbench
 
 [sysbench test](https://docs.pingcap.com/zh/tidb/stable/benchmark-tidb-using-sysbench#%E6%95%B0%E6%8D%AE%E5%AF%BC%E5%85%A5)
 
@@ -46,9 +46,9 @@ sysbench --config-file=config oltp_update_index --tables=32 --table-size=1000000
 sysbench --config-file=config oltp_read_only --tables=32 --table-size=10000000 run
 ```
 
-# TPC
+## TPC
 
-## TPC-C
+### TPC-C
 
 [tpc-c test](https://docs.pingcap.com/zh/tidb/stable/benchmark-tidb-using-tpcc#%E5%A6%82%E4%BD%95%E5%AF%B9-tidb-%E8%BF%9B%E8%A1%8C-tpc-c-%E6%B5%8B%E8%AF%95)
 
@@ -80,7 +80,7 @@ sysbench --config-file=config oltp_read_only --tables=32 --table-size=10000000 r
 ./bin/go-tpc tpcc --warehouses 4 prepare --output-type csv --output-dir data --pprof :10111
 ```
 
-## TPC-H
+### TPC-H
 
 ```bash
 # Prepare data with scale factor 1
@@ -106,11 +106,11 @@ sysbench --config-file=config oltp_read_only --tables=32 --table-size=10000000 r
 ./bin/go-tpc ch --warehouses $warehouses -T $tpWorkers -t $apWorkers --time $measurement-time run
 ```
 
-# TiDB Dashboard
+## TiDB Dashboard
 
 [TiDB dashboard](https://docs.pingcap.com/zh/tidb/stable/dashboard-diagnostics-usage#%E7%94%A8%E5%AF%B9%E6%AF%94%E6%8A%A5%E5%91%8A%E5%AE%9A%E4%BD%8D%E9%97%AE%E9%A2%98)
 
-# YCSB
+## YCSB
 
 ```bash
 # Load
