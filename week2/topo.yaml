@@ -30,12 +30,10 @@ server_configs:
     binlog.enable: false
     binlog.ignore-error: false
   tikv:
-    # server.grpc-concurrency: 4
-    # raftstore.apply-pool-size: 2
-    # raftstore.store-pool-size: 2
-    # rocksdb.max-sub-compactions: 1
-    # storage.block-cache.capacity: "16GB"
-    # readpool.unified.max-thread-count: 12
+    server.grpc-concurrency: 2
+    rocksdb.max-background-jobs: 4
+    raftdb.max-background-jobs: 4
+    readpool.unified.max-thread-count: 3
     readpool.storage.use-unified-pool: false
     readpool.coprocessor.use-unified-pool: true
   pd:

@@ -22,99 +22,198 @@
 
 ## 2. 拓扑结构
 
-本次测试一共使用了三台虚拟机，每台虚拟机分配了2048MB内存和1个虚拟CPU的上限，以下是服务器的网络拓扑结构
-
-- TiDB Server 192.168.99.101 (VM)
-- TiKV Server 192.168.99.102 (VM)
-- PD Server 192.168.99.103 (VM)
-- Prometheus Server 192.168.99.103 (VM)
-- Grafana Server 92.168.99.103 (VM)
-- Alertmanager Server 92.168.99.103 (VM)
+| IP地址             | 角色                  | 操作系统        | 核数          | 内存|
+| ---               | ---                   | ---           | ---           | ---|
+| 192.168.99.101    | TiDB Server           | CentOS 8.3.1  | 1vCPU         | 2GB|
+| 192.168.99.102    | TiKV Server           | CentOS 8.3.1  | 4vCPU         | 4GB|
+| 192.168.99.103    | PD Server             | CentOS 8.3.1  | 1vCPU         | 1GB|
+| 192.168.99.103    | Prometheus Server     | -             | -             | -  |
+| 192.168.99.103    | Grafana Server        | -             | -             | -  |
+| 192.168.99.103    | Alertmanager Server   | -             | -             | -  |
 
 ```bash
+# 初始化集群部署环境
 tiup cluster deploy tidb-cluster-1 v4.0.0  topo.yaml -u root -p
+# 开始部署
+tiup cluster start tidb-cluster-1
+# 检查集群的结点状态
+tiup cluster display tidb-cluster-1
 ```
 
-## Sysbench
+### 2.1 TiDB&TiKV服务器配置
 
-[sysbench test](https://docs.pingcap.com/zh/tidb/stable/benchmark-tidb-using-sysbench#%E6%95%B0%E6%8D%AE%E5%AF%BC%E5%85%A5)
-
-```bash
-sysbench --config-file=sysbench.conf oltp_point_select --tables=32 --table-size=10000000 prepare
-sysbench --config-file=config oltp_point_select --tables=32 --table-size=10000000 run
-sysbench --config-file=config oltp_update_index --tables=32 --table-size=10000000 run
-sysbench --config-file=config oltp_read_only --tables=32 --table-size=10000000 run
+```yaml
+server_configs:
+  tidb:
+    log.slow-threshold: 300
+    binlog.enable: false
+    binlog.ignore-error: false
+  tikv:
+    server.grpc-concurrency: 2
+    rocksdb.max-background-jobs: 4
+    raftdb.max-background-jobs: 4
+    readpool.unified.max-thread-count: 3
+    readpool.storage.use-unified-pool: false
+    readpool.coprocessor.use-unified-pool: true
 ```
 
-## TPC
+### 2.2 集群状态
 
-### TPC-C
+> tidb Cluster: tidb-cluster-1
+> tidb Version: v4.0.0
 
-[tpc-c test](https://docs.pingcap.com/zh/tidb/stable/benchmark-tidb-using-tpcc#%E5%A6%82%E4%BD%95%E5%AF%B9-tidb-%E8%BF%9B%E8%A1%8C-tpc-c-%E6%B5%8B%E8%AF%95)
+| ID                    |Role           |Host             |Ports         | OS/Arch       | Status      | Data Dir                      | Deploy Dir|
+| --                    | ----          | ----            | -----        | -------       | ------      | --------                      | ----------|
+| 192.168.99.103:9093   | alertmanager  | 192.168.99.103  | 9093/9094    | linux/x86_64  | Up          | /tidb-data/alertmanager-9093  | /tidb-deploy/alertmanager-9093|
+| 192.168.99.103:3000   | grafana       | 192.168.99.103  | 3000         | linux/x86_64  | activating  | -                             | /tidb-deploy/grafana-3000|
+| 192.168.99.103:2379   | pd            | 192.168.99.103  | 2379/2380    | linux/x86_64  | Up\|L\|UI   | /tidb-data/pd-2379            | /tidb-deploy/pd-2379|
+| 192.168.99.103:9090   | prometheus    | 192.168.99.103  | 9090         | linux/x86_64  | activating  | /tidb-data/prometheus-9090    | /tidb-deploy/prometheus-9090|
+| 192.168.99.101:4000   | tidb          | 192.168.99.101  | 4000/10080   | linux/x86_64  | Up          | -                             | /tidb-deploy/tidb-4000|
+| 192.168.99.102:20160  | tikv          | 192.168.99.102  | 20160/20181  | linux/x86_64  | Up          | /tidb-data/tikv-20160         | /tidb-deploy/tikv-20160|
+
+## 3. Sysbench压力测试
+
+### 3.1 产生数据集
 
 ```bash
-# Prepare
+sysbench --config-file=sysbench.conf oltp_point_select --tables=32 --table-size=1000000 prepare
+```
+
+### 3.2 输出结果
+
+```bash
+sysbench --config-file=sysbench.conf oltp_point_select --tables=32 --table-size=1000000 run
+```
+
+```bash
+sysbench --config-file=sysbench.conf oltp_update_index --tables=32 --table-size=1000000 run
+```
+
+
+```bash
+sysbench --config-file=sysbench.conf oltp_read_only --tables=32 --table-size=1000000 run
+```
+
+### 3.3 TiDB query summary QPS&duration
+
+### 3.4 TiKV details server's CPU&QPS
+
+### 3.5 TiKV details GRPC's QPS&duration
+
+## 3.6 结论
+
+## 4. TPC
+
+### 4.1 TPC-C
+
+#### 4.1.1 产生数据集
+
+```bash
 # Create 4 warehouses and use 4 partitions by HASH 
 ./bin/go-tpc tpcc --warehouses 4 --parts 4 prepare
+```
 
-# Run
+#### 4.1.2 输出结果
+
+```bash
 # Run TPCC workloads, you can just run or add --wait option to including wait times
 ./bin/go-tpc tpcc --warehouses 4 run
 # Run TPCC including wait times(keying & thinking time) on every transactions
 ./bin/go-tpc tpcc --warehouses 4 run --wait
-
-# Check
-# Check consistency. you can check after prepare or after run
-./bin/go-tpc tpcc --warehouses 4 check
-
-# Clean Up
-# Cleanup
-./bin/go-tpc tpcc --warehouses 4 cleanup
-
-# Others
-# Generate csv files (split to 100 files each table)
-./bin/go-tpc tpcc --warehouses 4 prepare -T 100 --output-type csv --output-dir data
-# Specified tables when generating csv files
-./bin/go-tpc tpcc --warehouses 4 prepare -T 100 --output-type csv --output-dir data --tables history,orders
-# Start pprof
-./bin/go-tpc tpcc --warehouses 4 prepare --output-type csv --output-dir data --pprof :10111
 ```
 
-### TPC-H
+#### 4.1.3 TiDB query summary QPS&duration
+
+TODO
+
+#### 4.1.4 TiKV details server's CPU&QPS
+
+TODO
+
+#### 4.1.5 TiKV details GRPC's QPS&duration
+
+TODO
+
+#### 4.1.6 结论
+
+TODO
+
+### 4.2 TPC-H
+
+TODO
+
+#### 4.2.1 产生数据集
 
 ```bash
 # Prepare data with scale factor 1
 ./bin/go-tpc tpch --sf=1 prepare
 # Prepare data with scale factor 1, create tiflash replica, and analyze table after data loaded
 ./bin/go-tpc tpch --sf 1 --analyze --tiflash prepare
+```
 
+TODO
+
+#### 4.2.2 输出结果
+
+```bash
 # Run TPCH workloads with result checking
 ./bin/go-tpc tpch --sf=1 --check=true run
 # Run TPCH workloads without result checking
 ./bin/go-tpc tpch --sf=1 run
-
-# Cleanup
-./bin/go-tpc tpch cleanup
-
-# CH-benCHmark
-# Prepare data
-./bin/go-tpc ch prepare
-# Prepare data, create tiflash replica, and analyze table after data loaded
-./bin/go-tpc ch --analyze --tiflash prepare
-
-# Run
-./bin/go-tpc ch --warehouses $warehouses -T $tpWorkers -t $apWorkers --time $measurement-time run
 ```
 
-## TiDB Dashboard
+TODO
 
-[TiDB dashboard](https://docs.pingcap.com/zh/tidb/stable/dashboard-diagnostics-usage#%E7%94%A8%E5%AF%B9%E6%AF%94%E6%8A%A5%E5%91%8A%E5%AE%9A%E4%BD%8D%E9%97%AE%E9%A2%98)
+#### 4.2.3 TiDB query summary QPS&duration
 
-## YCSB
+TODO
+
+#### 4.2.4 TiKV details server's CPU&QPS
+
+TODO
+
+#### 4.2.5 TiKV details GRPC's QPS&duration
+
+TODO
+
+#### 4.2.6 结论
+
+TODO
+
+## 5. YCSB
+
+TODO
+
+### 5.1 产生数据集
 
 ```bash
 # Load
 ./bin/go-ycsb load basic -P workloads/workloada
+```
+
+TODO
+
+### 5.2 输出结果
+
+```bash
 # Run
 ./bin/go-ycsb run basic -P workloads/workloada
 ```
+
+TODO
+
+### 5.3 TiDB query summary QPS&duration
+
+TODO
+
+### 5.4 TiKV details server's CPU&QPS
+
+TODO
+
+### 5.5 TiKV details GRPC's QPS&duration
+
+TODO
+
+### 5.6 结论
+
+TODO
