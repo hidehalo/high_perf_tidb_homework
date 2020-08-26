@@ -60,6 +60,7 @@ server_configs:
 ### 2.2 集群状态
 
 > tidb Cluster: tidb-cluster-1
+>
 > tidb Version: v4.0.0
 
 | ID                    |Role           |Host             |Ports         | OS/Arch       | Status      | Data Dir                      | Deploy Dir|
@@ -108,6 +109,7 @@ sysbench --config-file=sysbench.conf oltp_point_select --tables=32 --table-size=
 > \[ 50s \] thds: 8 tps: 283.08 qps: 283.08 \(r/w/o: 283.08/0.00/0.00\) lat \(ms,95%\): 104.84 err/s: 0.00 reconn/s: 0.00
 >
 > \[ 60s \] thds: 8 tps: 245.73 qps: 245.73 \(r/w/o: 245.73/0.00/0.00\) lat \(ms,95%\): 108.68 err/s: 0.00 reconn/s: 0.00
+>
 > SQL statistics:
 >     queries performed:
 >         read:                            11651
@@ -248,9 +250,20 @@ sysbench --config-file=sysbench.conf oltp_read_only --tables=32 --table-size=100
 
 ### 3.4 TiKV details server's CPU&QPS
 
+![TiKV details CPU](./screenshots/sysbench/tikv_details_cpu.png)
+
+![TiKV details duration](./screenshots/sysbench/tikv_details_qps.png)
+
+
 ### 3.5 TiKV details GRPC's QPS&duration
 
+![TiKV details CPU](./screenshots/sysbench/tikv_details_grpc_ops.png)
+
+![TiKV details gRPC P99 duration](./screenshots/sysbench/tikv_details_grpc_P99_duration.png)
+
 ## 3.6 结论
+
+三种负载的主要瓶颈都在TiKV结点的IO上，写密集的场景coprocessor的开销比较大。TiKV结点的CPU资源并没有很好的利用完全，但是内存已经打满。
 
 ## 4. TPC
 
