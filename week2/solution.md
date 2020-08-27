@@ -312,49 +312,108 @@ sysbench --config-file=sysbench.conf oltp_read_only --tables=32 --table-size=100
 
 ### 4.2 TPC-H
 
-#### 4.2.1 产生数据集
+由于之前的OLTP测试中TiKV在并发事务上表现的不太好，本次测试将修改TiKV结点配置。
+
+#### 4.2.1 修改后的TiKV配置
+
+```yaml
+  tikv:
+    raftdb.max-background-jobs: 2
+    readpool.coprocessor.use-unified-pool: true
+    readpool.storage.use-unified-pool: false
+    readpool.unified.max-thread-count: 2
+    rocksdb.max-background-jobs: 2
+    server.grpc-concurrency: 2
+    pessimistic-txn.pipelined: true
+    backup.num-threads: 1
+```
+
+#### 4.2.2 产生数据集
 
 ```bash
 ./bin/go-tpc tpch prepare -H 192.168.99.101 -P 4000 -D tpch --sf 50 --analyze
 ```
 
-TODO
-
-#### 4.2.2 输出结果
+#### 4.2.3 输出结果
 
 ```bash
 ./bin/go-tpc tpch run -H 192.168.99.101 -P 4000 -D tpch --sf 50
 ```
 
+TiDB down
+
+> [mysql] 2020/08/27 16:40:49 packets.go:36: read tcp 192.168.99.1:63133->192.168.99.101:4000: read: operation timed out
+>
+> [2020-08-27 16:40:50] execute run failed, err execute query 
+>
+> select
+> 	n_name,
+> 	sum(l_extendedprice * (1 - l_discount)) as revenue
+>
+> from
+>
+> 	customer,
+> 	orders,
+> 	lineitem,
+> 	supplier,
+> 	nation,
+> 	region
+>
+> where
+>
+> 	c_custkey = o_custkey
+> 	and l_orderkey = o_orderkey
+> 	and l_suppkey = s_suppkey
+> 	and c_nationkey = s_nationkey
+> 	and s_nationkey = n_nationkey
+> 	and n_regionkey = r_regionkey
+> 	and r_name = 'MIDDLE EAST'
+> 	and o_orderdate >= '1994-01-01'
+> 	and o_orderdate < date_add('1994-01-01', interval '1' year)
+>
+> group by
+>
+> 	n_name
+>
+> order by
+>
+> 	revenue desc;
+>
+>  failed invalid connection
+>
+> Finished
+>
+> [Summary] Q1: 105.51s
+>
+> [Summary] Q2: 54.28s
+>
+> [Summary] Q3: 209.38s
+>
+> [Summary] Q4: 127.40s
+
+#### 4.2.4 TiDB query summary QPS&duration
+
 TODO
 
-#### 4.2.3 TiDB query summary QPS&duration
+#### 4.2.5 TiKV details server's CPU&QPS
 
 TODO
 
-#### 4.2.4 TiKV details server's CPU&QPS
+#### 4.2.6 TiKV details GRPC's QPS&duration
 
 TODO
 
-#### 4.2.5 TiKV details GRPC's QPS&duration
-
-TODO
-
-#### 4.2.6 结论
+#### 4.2.7 结论
 
 TODO
 
 ## 5. YCSB
-
-TODO
 
 ### 5.1 产生数据集
 
 ```bash
 ./bin/go-ycsb load mysql -P workloads/workloada -p recordcount=1000000 -p mysql.host=192.168.99.101 -p mysql.port=4000 --threads 256
 ```
-
-TODO
 
 ### 5.2 输出结果
 
