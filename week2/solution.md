@@ -263,7 +263,7 @@ sysbench --config-file=sysbench.conf oltp_read_only --tables=32 --table-size=100
 
 ## 3.6 结论
 
-三种负载的主要瓶颈都在TiKV结点的IO上，范围查询密集的场景coprocessor的开销比较大。TiKV结点的CPU资源并没有很好的利用完全，但是内存已经打满。
+三种负载的主要瓶颈都在TiKV结点的IO上，范围查询密集的场景coprocessor的开销比较大，写密集场景下锁的开销非常大。TiKV结点的CPU资源并没有很好的利用完全，但是内存已经打满。
 
 ## 4. TPC
 
