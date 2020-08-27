@@ -281,7 +281,18 @@ sysbench --config-file=sysbench.conf oltp_read_only --tables=32 --table-size=100
 ./bin/go-tpc tpcc -H 192.168.99.101 -P 4000 -D tpcc --warehouses 100 run
 ```
 
-`PS: 执行时间太长，未全部完成。`
+> [Summary] DELIVERY - Takes(s): 87866.1, Count: 15576, TPM: 10.6, Sum(ms): 10987655, Avg(ms): 705, 90th(ms): 1500, 99th(ms): 4000, 99.9th(ms): 16000
+>
+> [Summary] NEW_ORDER - Takes(s): 87889.3, Count: 175158, TPM: 119.6, Sum(ms): 50628541, Avg(ms): 289, 90th(ms): 512, 99th(ms): 1500, 99.9th(ms): 8000
+>
+> [Summary] ORDER_STATUS - Takes(s): 87872.1, Count: 15763, TPM: 10.8, Sum(ms): 2335770, Avg(ms): 148, 90th(ms): 256, 99th(ms): 512, 99.9th(ms): 1500
+>
+> [Summary] PAYMENT - Takes(s): 87887.8, Count: 167654, TPM: 114.5, Sum(ms): 19562679, Avg(ms): 116, 90th(ms): 192, 99th(ms): 1000, 99.9th(ms): 4000
+>
+> [Summary] PAYMENT_ERR - Takes(s): 87887.8, Count: 1, TPM: 0.0, Sum(ms): 1067, Avg(ms): 1067, 90th(ms): 1500, 99th(ms): 1500, 99.9th(ms): 1500
+>
+> [Summary] STOCK_LEVEL - Takes(s): 87885.6, Count: 15531, TPM: 10.6, Sum(ms): 4176137, Avg(ms): 268, 90th(ms): 1000, 99th(ms): 2000, 99.9th(ms): 4000
+> tpmC: 119.6
 
 #### 4.1.3 TiDB query summary QPS&duration
 
@@ -297,7 +308,7 @@ sysbench --config-file=sysbench.conf oltp_read_only --tables=32 --table-size=100
 
 #### 4.1.6 结论
 
-性能瓶颈仍然是在TiKV结点上，KV事务的并发引发了大量的锁开销。
+性能瓶颈仍然是在TiKV结点上，KV事务的并发引发了大量的锁开销，引起了TiDB QPS的毛刺。
 
 ### 4.2 TPC-H
 
