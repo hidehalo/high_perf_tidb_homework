@@ -304,7 +304,7 @@ TODO
 #### 4.2.1 产生数据集
 
 ```bash
-./bin/go-tpc tpch prepare -H 192.168.99.101 -P 4000 -D tpch --sf 5 --analyze
+./bin/go-tpc tpch prepare -H 192.168.99.101 -P 4000 -D tpch --sf 50 --analyze
 ```
 
 TODO
@@ -312,10 +312,7 @@ TODO
 #### 4.2.2 输出结果
 
 ```bash
-# Run TPCH workloads with result checking
-./bin/go-tpc tpch --sf=1 --check=true run
-# Run TPCH workloads without result checking
-./bin/go-tpc tpch --sf=1 run
+./bin/go-tpc tpch run -H 192.168.99.101 -P 4000 -D tpch --sf 50
 ```
 
 TODO
@@ -351,8 +348,7 @@ TODO
 ### 5.2 输出结果
 
 ```bash
-# Run
-./bin/go-ycsb run basic -P workloads/workloada
+./bin/go-ycsb run mysql -P workloads/workloada -p operationcount=1000000 -p mysql.host=192.168.99.101 -p mysql.port=4000 --threads 256
 ```
 
 TODO
