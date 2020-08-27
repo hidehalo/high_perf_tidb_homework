@@ -281,25 +281,25 @@ sysbench --config-file=sysbench.conf oltp_read_only --tables=32 --table-size=100
 ./bin/go-tpc tpcc -H 192.168.99.101 -P 4000 -D tpcc --warehouses 100 run
 ```
 
+`PS: 执行时间太长，未全部完成。`
+
 #### 4.1.3 TiDB query summary QPS&duration
 
-TODO
+![QPS&duration](./screenshots/tpcc/qps&duration.png)
 
 #### 4.1.4 TiKV details server's CPU&QPS
 
-TODO
+![TiKV details CPU&QPS](./screenshots/tpcc/tikv_details_cpu&qps.png)
 
 #### 4.1.5 TiKV details GRPC's QPS&duration
 
-TODO
+![TiKV details gRPC QPS&P99 duration](./screenshots/tpcc/tikv_details_grpc_qps&duration.png)
 
 #### 4.1.6 结论
 
-TODO
+性能瓶颈仍然是在TiKV结点上，KV事务的并发引发了大量的锁开销。
 
 ### 4.2 TPC-H
-
-TODO
 
 #### 4.2.1 产生数据集
 
