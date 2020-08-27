@@ -263,7 +263,7 @@ sysbench --config-file=sysbench.conf oltp_read_only --tables=32 --table-size=100
 
 ## 3.6 结论
 
-三种负载的主要瓶颈都在TiKV结点的IO上，写密集的场景coprocessor的开销比较大。TiKV结点的CPU资源并没有很好的利用完全，但是内存已经打满。
+三种负载的主要瓶颈都在TiKV结点的IO上，范围查询密集的场景coprocessor的开销比较大。TiKV结点的CPU资源并没有很好的利用完全，但是内存已经打满。
 
 ## 4. TPC
 
@@ -272,17 +272,13 @@ sysbench --config-file=sysbench.conf oltp_read_only --tables=32 --table-size=100
 #### 4.1.1 产生数据集
 
 ```bash
-# Create 4 warehouses and use 4 partitions by HASH 
-./bin/go-tpc tpcc --warehouses 4 --parts 4 prepare
+./bin/go-tpc tpcc -H 192.168.99.101 -P 4000 -D tpcc --warehouses 100 prepare
 ```
 
 #### 4.1.2 输出结果
 
 ```bash
-# Run TPCC workloads, you can just run or add --wait option to including wait times
-./bin/go-tpc tpcc --warehouses 4 run
-# Run TPCC including wait times(keying & thinking time) on every transactions
-./bin/go-tpc tpcc --warehouses 4 run --wait
+./bin/go-tpc tpcc -H 192.168.99.101 -P 4000 -D tpcc --warehouses 100 run
 ```
 
 #### 4.1.3 TiDB query summary QPS&duration
@@ -308,10 +304,7 @@ TODO
 #### 4.2.1 产生数据集
 
 ```bash
-# Prepare data with scale factor 1
-./bin/go-tpc tpch --sf=1 prepare
-# Prepare data with scale factor 1, create tiflash replica, and analyze table after data loaded
-./bin/go-tpc tpch --sf 1 --analyze --tiflash prepare
+./bin/go-tpc tpch prepare -H 192.168.99.101 -P 4000 -D tpch --sf 5 --analyze
 ```
 
 TODO
@@ -350,8 +343,7 @@ TODO
 ### 5.1 产生数据集
 
 ```bash
-# Load
-./bin/go-ycsb load basic -P workloads/workloada
+./bin/go-ycsb load mysql -P workloads/workloada -p recordcount=1000000 -p mysql.host=192.168.99.101 -p mysql.port=4000 --threads 256
 ```
 
 TODO
