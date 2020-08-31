@@ -43,27 +43,45 @@ issue 描述应包含：
 ```yaml
 server_configs:
   tidb:
-    log.slow-threshold: 300
     binlog.enable: false
     binlog.ignore-error: false
+    enable-streaming: true
+    log.enable-slow-log: false
+    log.slow-threshold: 300
+    oom-use-tmp-storage: false
+    performance.tcp-keep-alive: true
+    prepared-plan-cache.enabled: true
   tikv:
-    server.grpc-concurrency: 4
-    rocksdb.max-background-jobs: 4
+    backup.num-threads: 1
+    pessimistic-txn.pipelined: true
     raftdb.max-background-jobs: 4
-    readpool.unified.max-thread-count: 4
-    readpool.storage.use-unified-pool: true
     readpool.coprocessor.use-unified-pool: true
+    readpool.storage.use-unified-pool: true
+    readpool.unified.max-thread-count: 4
+    rocksdb.max-background-jobs: 4
+    server.grpc-concurrency: 4
+  pd:
+    schedule.leader-schedule-limit: 2
+    schedule.region-schedule-limit: 1024
+    schedule.replica-schedule-limit: 32
 ```
 
-## 3. 使用Go-YCSB进行压测
+## 3. 使用Go-YCSB进行压测及分析
 
-Go-YCSB共有a-f六种负载，每种负载都由至少一种SQL命令按比例组合而成，不进行投影，请求量/时间呈正态分布。
+Go-YCSB共有a-f六种负载，每种负载都由至少一种SQL命令按比例组合而成，不进行投影，请求量/时间呈正态分布。以下测试均采用256个线程模拟并发。
 
-## 3.1 数据模式及数据集
+```bash
+./bin/go-ycsb run mysql -P workloads/workloadx
+  -p operationcount=1000000
+  -p mysql.host=192.168.99.101
+  -p mysql.port=4000 --threads 256
+```
 
-usertable (YCSB_KEY, FIELD0, FIELD1, FIELD2, FIELD3, FIELD4, FIELD5, FIELD6, FIELD7, FIELD8, FIELD9)
+## 3.1 数据模式及数据集大小
 
-usertable表共有3M条记录
+### 3.1.1 数据模式
+
+usertable(<u style="color:red;">YCSB_KEY</u>, FIELD0, FIELD1, FIELD2, FIELD3, FIELD4, FIELD5, FIELD6, FIELD7, FIELD8, FIELD9)
 
 ```sql
 CREATE TABLE usertable (
@@ -78,12 +96,27 @@ CREATE TABLE usertable (
   FIELD7 VARCHAR(100),
   FIELD8 VARCHAR(100),
   FIELD9 VARCHAR(100),
-)
+  PRIMARY KEY (`YCSB_KEY`)
+);
 ```
 
-## 3.2 SQL模板
+### 3.1.2 数据集大小
 
-Go-YCSB负载有Read(点查询)、Scan(范围查询)、Insert、Update(点查询)、Delete(点查询)，以下会列出对应的SQL模板。
+```sql
+mysql> select count(1) from usertable;
+```
+
+```shell
++----------+
+| count(1) | 
++----------+
+|   999936 |
++----------+
+```
+
+## 3.2 Workload涉及的SQL
+
+Go-YCSB负载有`Read`(点查询)、`Scan`(范围查询)、`Insert`、`Update`(点查询)、`Delete`(点查询)，以下会列出对应的SQL模板。
 
 ### 3.2.1 Read
 
@@ -115,40 +148,67 @@ UPDATE $table set $field1 = ?, $field2 = ? ... WHERE YCSB_KEY = ?
 DELETE FROM $table WHERE YCSB_KEY = ?
 ```
 
-## 3.3 TiDB Profile采集与分析
+## 3.3 TiDB profile采集与分析
 
 ### 3.3.1 Workload a
 
+#### 3.3.1.1 负载配置
+
 ```bash
-# Yahoo! Cloud System Benchmark
-# Workload A: Update heavy workload
-#   Application example: Session store recording recent actions
-#                        
-#   Read/update ratio: 50/50
-#   Default data size: 1 KB records (10 fields, 100 bytes each, plus key)
-#   Request distribution: zipfian
-
-recordcount=1000
-operationcount=1000
-workload=core
-
-readallfields=true
-
-readproportion=0.5
-updateproportion=0.5
-scanproportion=0
-insertproportion=0
-
-requestdistribution=uniform
+"threadcount"="256"
+"mysql.host"="192.168.99.101"
+"updateproportion"="0.5"
+"insertproportion"="0"
+"mysql.port"="4000"
+"workload"="core"
+"requestdistribution"="uniform"
+"dotransactions"="true"
+"recordcount"="1000"
+"operationcount"="1000000"
+"scanproportion"="0"
+"readproportion"="0.5"
+"readallfields"="true"
 ```
 
-### 3.3.1.1 TiDB Profile
+#### 3.3.1.2 压测结果
+
+```bash
+READ   - Takes(s): 215.8, Count: 115432, OPS: 535.0, Avg(us): 115576, Min(us): 1795, Max(us): 5059776, 99th(us): 357000, 99.9th(us): 1072000, 99.99th(us): 2871000
+UPDATE - Takes(s): 211.6, Count: 114645, OPS: 541.9, Avg(us): 347580, Min(us): 8232, Max(us): 13621982, 99th(us): 1335000, 99.9th(us): 4250000, 99.99th(us): 7361000
+```
+
+### 3.3.1.1 TiDB profile of workload a
 
 ![YCSB workload a TiDB profile](./profiles/ycsb/tidb/a.svg)
 
 ### 3.3.1.2 分析
 
+#### 3.3.1.2.1 CPU
+
+Workload a是50%的`Read`操作和50%的`Update`操作组成的负载，从profile中可以得到以下信息：
+
+1. 采样了120秒，采集样本只有6.07秒，TiDB的CPU使用率非常低
+2. 样本的时间消耗主要聚集在
+    1. session.session.CommonExec 23.56%
+    2. runtime.mallocgc 14.17%
+    3. runtime.scanobject 11.2%
+    4. net.conn.Write 10.05%
+    5. server.clientConn.writeResult 9.56%
+
+#### 3.3.1.2.2 内存
+
+TODO
+
+#### 3.3.1.2.3 IO
+
+TODO
+
 ### 3.3.1.3 结论
+
+Workload a下主要CPU消耗使用在执行SQL计算、内存分配和GC上了，其余一小部分的开销主要在网络IO上。
+SQL计算开销对应的是session.session.CommonExec执行的时间，内存分配和GC开销对应的是runtime.mallocgc与runtime.scanobject执行时间之和，网络IO的开销大约小于等于syscall.Syscall的执行时间。
+session.session.CommonExec又可以细分成plan.Optimize(9.88%)、executor.ExecStmt.Exec(11.53%)
+因此，假设优化相同比例的开销，内存分配与GC的耗时占比比较大，减少内存的消耗可以作为优先的优化规则。其次是网络IO、查询执行器、查询计划优化器。
 
 ### 3.3.2 Workload b
 
@@ -175,13 +235,21 @@ insertproportion=0
 requestdistribution=uniform
 ```
 
-### 3.3.2.1 TiDB Profile
+### 3.3.2.1 TiDB profile of workload b
 
 ![YCSB workload b TiDB profile](./profiles/ycsb/tidb/b.svg)
 
 ### 3.3.2.2 分析
 
+Workload b是95%的`Read`操作和5%的`Update`操作组成的负载，从profile中可以得到以下信息：
+
+1. 采样了120秒，采集样本85.54秒，TiDB的CPU使用率高达71.19%
+2. 相较于`Update`操作较繁重的workload a，减少`Update`操作的workload b显著的提高了CPU的利用率
+3. 样本的时间消耗主要聚集在
+
 ### 3.3.2.3 结论
+
+TODO
 
 ### 3.3.3 Workload c
 
@@ -208,13 +276,21 @@ insertproportion=0
 requestdistribution=uniform
 ```
 
-### 3.3.3.1 TiDB Profile
+### 3.3.3.1 TiDB profile of workload c
 
 ![YCSB workload c TiDB profile](./profiles/ycsb/tidb/c.svg)
 
 ### 3.3.3.2 分析
 
+Workload c是100%的`Read`操作的负载，从profile中可以得到以下信息：
+
+1. 采样了120秒，采集样本87.22秒，TiDB的CPU使用率高达72.57%
+2. 相较于拥有少量`Update`操作的workload b，workload c的CPU使用率非常相近，少量的`Update`操作对`Read`操作的影响很小
+3. 样本的时间消耗主要聚集在
+
 ### 3.3.3.3 结论
+
+TODO
 
 ### 3.3.4 Workload d
 
@@ -246,11 +322,17 @@ insertproportion=0.05
 requestdistribution=latest
 ```
 
-### 3.3.4.1 TiDB Profile
+### 3.3.4.1 TiDB profile of workload d
 
 ![YCSB workload d TiDB profile](./profiles/ycsb/tidb/d.svg)
 
 ### 3.3.4.2 分析
+
+Workload d是95%的`Read`操作和5%的`Insert`操作组成的负载，从profile中可以得到以下信息：
+
+1. 采样了120秒，采集样本73.17秒，TiDB的CPU使用率高达60.90%
+2. 相较于拥有等量`Update`操作的workload b，workload d的CPU使用率小幅下降，少量的`Insert`操作对`Read`操作的影响较明显
+3. 样本的时间消耗主要聚集在
 
 ### 3.3.4.3 结论
 
@@ -288,13 +370,21 @@ maxscanlength=1
 scanlengthdistribution=uniform
 ```
 
-### 3.3.5.1 TiDB Profile
+### 3.3.5.1 TiDB profile of workload e
 
 ![YCSB workload e TiDB profile](./profiles/ycsb/tidb/e.svg)
 
 ### 3.3.5.2 分析
 
+Workload e是95%的`Scan`操作和5%的`Insert`操作组成的负载，从profile中可以得到以下信息：
+
+1. 采样了120秒，采集样本87.22秒，TiDB的CPU使用率高达72.57%
+2. 相较于拥有少量`Update`操作的workload b，workload c的CPU使用率非常相近，少量的`Update`操作对`Read`操作的影响很小
+3. 样本的时间消耗主要聚集在
+
 ### 3.3.5.3 结论
+
+TODO
 
 ### 3.3.6 Workload f
 
@@ -322,10 +412,22 @@ readmodifywriteproportion=0.5
 requestdistribution=uniform
 ```
 
-### 3.3.6.1 TiDB Profile
+### 3.3.6.1 TiDB profile of workload f
 
 ![YCSB workload f TiDB profile](./profiles/ycsb/tidb/f.svg)
 
 ### 3.3.6.2 分析
 
+Workload f是50%的`Read`操作和50%的`Read`+`Update`(readmodifywrite)操作组成的负载，从profile中可以得到以下信息：
+
+1. 采样了120秒，采集样本76.61秒，TiDB的CPU使用率高达63.68%
+2. 尽管`Update`操作占比不小，CPU使用率远高于workload a
+3. 样本的时间消耗主要聚集在
+
 ### 3.3.6.3 结论
+
+TODO
+
+## 4. 总结
+
+TODO
