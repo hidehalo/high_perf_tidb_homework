@@ -410,7 +410,7 @@ Showing top 15 nodes out of 269
 
 ##### 3.3.1.6 结论
 
-Workload a是50%的`Read`操作和50%的`Update`操作组成的负载，在当前拓扑下IO开销占了不小比重，可能主要是由于设备磁盘性能的不足。在SQL计算程序上，对内存的管理或许还有优化空间。
+Workload a是50%的`Read`操作和50%的`Update`操作组成的负载。在当前拓扑下，等待磁盘IO的开销占了不小比重，可能主要是由于设备磁盘性能的不足。网络IO开销占比不大。在SQL计算程序上，对内存的管理或许还有优化空间。
 
 ---
 
@@ -636,6 +636,8 @@ Showing top 15 nodes out of 230
 
 ![Workload c tikv network](./profiles/ycsb/tidb/workloadc/c_tikv_net.png)
 
+根据以上监控数据可以得出：
+
 ##### 3.3.2.6 结论
 
 Workload c是100%的`Read`操作的负载，QPS相较于workload a大幅提升。
@@ -647,19 +649,265 @@ Workload c是100%的`Read`操作的负载，QPS相较于workload a大幅提升�
 ##### 3.3.3.1 负载配置
 
 ```bash
-
+"updateproportion"="0"
+"workload"="core"
+"requestdistribution"="uniform"
+"maxscanlength"="1"
+"scanproportion"="0.95"
+"operationcount"="1000000"
+"threadcount"="256"
+"readallfields"="true"
+"scanlengthdistribution"="uniform"
+"dotransactions"="true"
+"readproportion"="0"
+"recordcount"="1000"
+"mysql.host"="192.168.99.101"
+"mysql.port"="4000"
+"insertproportion"="0.05"
 ```
 
 ##### 3.3.3.2 压测结果
 
 ```bash
-
+INSERT - Takes(s): 1201.7, Count: 49917, OPS: 41.5, Avg(us): 214754, Min(us): 2764, Max(us): 20166731, 99th(us): 389000, 99.9th(us): 8160000, 99.99th(us): 20053000
+SCAN   - Takes(s): 1201.7, Count: 950019, OPS: 790.6, Avg(us): 307257, Min(us): 4079, Max(us): 21248821, 99th(us): 523000, 99.9th(us): 10371000, 99.99th(us): 20184000
 ```
 ##### 3.3.3.3 CPU
 
+```bash
+# 根据执行加调用外部函数时长逆序排列得到前15项函数
+go tool pprof -nodecount 15 -cum -tree  profile
+
+Duration: 2.01mins, Total samples = 96.74s (80.39%)
+Showing nodes accounting for 5.49s, 5.68% of 96.74s total
+Dropped 1485 nodes (cum <= 0.48s)
+Showing top 15 nodes out of 316
+----------------------------------------------------------+-------------
+      flat  flat%   sum%        cum   cum%   calls calls% + context 	 	 
+----------------------------------------------------------+-------------
+         0     0%     0%     51.92s 53.67%                | github.com/pingcap/tidb/server.(*Server).onConn
+                                            51.92s   100% |   github.com/pingcap/tidb/server.(*clientConn).Run
+----------------------------------------------------------+-------------
+                                            51.92s   100% |   github.com/pingcap/tidb/server.(*Server).onConn
+     0.15s  0.16%  0.16%     51.92s 53.67%                | github.com/pingcap/tidb/server.(*clientConn).Run
+                                            48.09s 92.62% |   github.com/pingcap/tidb/server.(*clientConn).dispatch
+                                             0.25s  0.48% |   runtime.mallocgc
+----------------------------------------------------------+-------------
+                                            48.09s   100% |   github.com/pingcap/tidb/server.(*clientConn).Run
+     0.07s 0.072%  0.23%     48.09s 49.71%                | github.com/pingcap/tidb/server.(*clientConn).dispatch
+                                            47.01s 97.75% |   github.com/pingcap/tidb/server.(*clientConn).handleStmtExecute
+                                             0.10s  0.21% |   runtime.newobject
+----------------------------------------------------------+-------------
+                                            47.01s   100% |   github.com/pingcap/tidb/server.(*clientConn).dispatch
+     0.12s  0.12%  0.35%     47.01s 48.59%                | github.com/pingcap/tidb/server.(*clientConn).handleStmtExecute
+                                            23.79s 50.61% |   github.com/pingcap/tidb/server.(*clientConn).writeResultset
+                                            22.54s 47.95% |   github.com/pingcap/tidb/server.(*TiDBStatement).Execute
+----------------------------------------------------------+-------------
+                                            23.79s   100% |   github.com/pingcap/tidb/server.(*clientConn).handleStmtExecute
+     0.01s  0.01%  0.36%     23.79s 24.59%                | github.com/pingcap/tidb/server.(*clientConn).writeResultset
+                                             2.55s 10.72% |   runtime.newobject
+                                             1.84s  7.73% |   runtime.mallocgc
+                                             0.87s  3.66% |   runtime.systemstack
+----------------------------------------------------------+-------------
+                                            15.77s 67.71% |   runtime.newobject
+                                             1.84s  7.90% |   github.com/pingcap/tidb/server.(*clientConn).writeResultset
+                                             1.45s  6.23% |   github.com/pingcap/tidb/planner.optimize
+                                             0.60s  2.58% |   github.com/pingcap/tidb/session.(*session).CommonExec
+                                             0.25s  1.07% |   github.com/pingcap/tidb/server.(*clientConn).Run
+                                             0.19s  0.82% |   github.com/pingcap/tidb/planner.Optimize
+     3.12s  3.23%  3.59%     23.29s 24.07%                | runtime.mallocgc
+                                             7.33s 31.47% |   runtime.systemstack
+----------------------------------------------------------+-------------
+                                            22.54s   100% |   github.com/pingcap/tidb/server.(*clientConn).handleStmtExecute
+         0     0%  3.59%     22.54s 23.30%                | github.com/pingcap/tidb/server.(*TiDBStatement).Execute
+                                            22.49s 99.78% |   github.com/pingcap/tidb/session.(*session).ExecutePreparedStmt
+----------------------------------------------------------+-------------
+                                            22.49s   100% |   github.com/pingcap/tidb/server.(*TiDBStatement).Execute
+     0.01s  0.01%  3.60%     22.49s 23.25%                | github.com/pingcap/tidb/session.(*session).ExecutePreparedStmt
+                                            22.16s 98.53% |   github.com/pingcap/tidb/session.(*session).CommonExec
+----------------------------------------------------------+-------------
+                                            22.16s   100% |   github.com/pingcap/tidb/session.(*session).ExecutePreparedStmt
+     0.03s 0.031%  3.63%     22.16s 22.91%                | github.com/pingcap/tidb/session.(*session).CommonExec
+                                            15.96s 72.02% |   github.com/pingcap/tidb/executor.CompileExecutePreparedStmt
+                                             1.76s  7.94% |   runtime.newobject
+                                             0.60s  2.71% |   runtime.mallocgc
+                                             0.10s  0.45% |   runtime.systemstack
+----------------------------------------------------------+-------------
+                                             2.55s 14.51% |   github.com/pingcap/tidb/server.(*clientConn).writeResultset
+                                             2.51s 14.29% |   github.com/pingcap/tidb/planner.optimize
+                                             1.76s 10.02% |   github.com/pingcap/tidb/session.(*session).CommonExec
+                                             0.33s  1.88% |   github.com/pingcap/tidb/planner.Optimize
+                                             0.26s  1.48% |   github.com/pingcap/tidb/executor.CompileExecutePreparedStmt
+                                             0.10s  0.57% |   github.com/pingcap/tidb/server.(*clientConn).dispatch
+     1.80s  1.86%  5.49%     17.57s 18.16%                | runtime.newobject
+                                            15.77s 89.76% |   runtime.mallocgc
+----------------------------------------------------------+-------------
+                                             7.33s 42.32% |   runtime.mallocgc
+                                             0.87s  5.02% |   github.com/pingcap/tidb/server.(*clientConn).writeResultset
+                                             0.40s  2.31% |   github.com/pingcap/tidb/planner.optimize
+                                             0.10s  0.58% |   github.com/pingcap/tidb/session.(*session).CommonExec
+     0.10s   0.1%  5.59%     17.32s 17.90%                | runtime.systemstack
+----------------------------------------------------------+-------------
+                                            15.96s   100% |   github.com/pingcap/tidb/session.(*session).CommonExec
+         0     0%  5.59%     15.96s 16.50%                | github.com/pingcap/tidb/executor.CompileExecutePreparedStmt
+                                            15.41s 96.55% |   github.com/pingcap/tidb/planner.Optimize
+                                             0.26s  1.63% |   runtime.newobject
+----------------------------------------------------------+-------------
+                                            15.41s 99.55% |   github.com/pingcap/tidb/executor.CompileExecutePreparedStmt
+                                            14.54s 93.93% |   github.com/pingcap/tidb/planner/core.(*Execute).OptimizePreparedPlan
+     0.01s  0.01%  5.60%     15.48s 16.00%                | github.com/pingcap/tidb/planner.Optimize
+                                            15.14s 97.80% |   github.com/pingcap/tidb/planner.optimize
+                                             0.33s  2.13% |   runtime.newobject
+                                             0.19s  1.23% |   runtime.mallocgc
+----------------------------------------------------------+-------------
+                                            15.14s   100% |   github.com/pingcap/tidb/planner.Optimize
+     0.01s  0.01%  5.61%     15.14s 15.65%                | github.com/pingcap/tidb/planner.optimize
+                                            14.77s 97.56% |   github.com/pingcap/tidb/planner/core.(*Execute).OptimizePreparedPlan
+                                             2.51s 16.58% |   runtime.newobject
+                                             1.45s  9.58% |   runtime.mallocgc
+                                             0.40s  2.64% |   runtime.systemstack
+----------------------------------------------------------+-------------
+                                            14.77s   100% |   github.com/pingcap/tidb/planner.optimize
+     0.06s 0.062%  5.68%     14.77s 15.27%                | github.com/pingcap/tidb/planner/core.(*Execute).OptimizePreparedPlan
+                                            14.54s 98.44% |   github.com/pingcap/tidb/planner.Optimize
+----------------------------------------------------------+-------------
+```
+
+```bash
+# 根据执行时长逆序排列得到15项函数
+go tool pprof -nodecount 15 -flat -tree  profile
+
+Duration: 2.01mins, Total samples = 1.61mins (80.39%)
+Showing nodes accounting for 0.64mins, 39.84% of 1.61mins total
+Dropped 1485 nodes (cum <= 0.01mins)
+Showing top 15 nodes out of 316
+----------------------------------------------------------+-------------
+      flat  flat%   sum%        cum   cum%   calls calls% + context 	 	 
+----------------------------------------------------------+-------------
+  0.13mins  8.30%  8.30%   0.14mins  8.72%                | syscall.Syscall
+----------------------------------------------------------+-------------
+                                          0.11mins 54.90% |   runtime.mallocgc
+  0.10mins  6.51% 14.81%   0.19mins 12.03%                | runtime.scanobject
+                                          0.05mins 23.37% |   runtime.findObject
+                                          0.01mins  5.58% |   runtime.markBits.isMarked
+----------------------------------------------------------+-------------
+                                          0.05mins 65.70% |   runtime.scanobject
+                                                 0  2.90% |   runtime.selectgo
+  0.06mins  3.86% 18.67%   0.07mins  4.28%                | runtime.findObject
+----------------------------------------------------------+-------------
+                                          0.26mins 67.71% |   runtime.newobject
+  0.05mins  3.23% 21.89%   0.39mins 24.07%                | runtime.mallocgc
+                                          0.11mins 27.44% |   runtime.scanobject
+                                          0.10mins 24.47% |   runtime.heapBitsSetType
+                                          0.03mins  8.93% |   runtime.memclrNoHeapPointers
+                                          0.03mins  6.74% |   runtime.nextFreeFast
+                                                 0  0.86% |   runtime.pcvalue
+----------------------------------------------------------+-------------
+                                          0.10mins   100% |   runtime.mallocgc
+  0.04mins  2.38% 24.27%   0.10mins  5.89%                | runtime.heapBitsSetType
+                                          0.02mins 25.79% |   runtime.pcvalue
+                                                 0  1.93% |   runtime.memmove
+----------------------------------------------------------+-------------
+  0.04mins  2.26% 26.54%   0.04mins  2.26%                | crypto/sha256.block
+----------------------------------------------------------+-------------
+                                          0.03mins 95.41% |   runtime.mallocgc
+  0.04mins  2.25% 28.79%   0.04mins  2.25%                | runtime.memclrNoHeapPointers
+----------------------------------------------------------+-------------
+                                                 0  5.58% |   runtime.heapBitsSetType
+  0.03mins  2.04% 30.82%   0.03mins  2.04%                | runtime.memmove
+----------------------------------------------------------+-------------
+  0.03mins  1.86% 32.69%   0.29mins 18.16%                | runtime.newobject
+                                          0.26mins 89.76% |   runtime.mallocgc
+----------------------------------------------------------+-------------
+                                          0.03mins   100% |   runtime.pcvalue
+  0.03mins  1.79% 34.47%   0.03mins  2.11%                | runtime.step
+----------------------------------------------------------+-------------
+                                          0.03mins   100% |   runtime.mallocgc
+  0.03mins  1.62% 36.10%   0.03mins  1.62%                | runtime.nextFreeFast
+----------------------------------------------------------+-------------
+                                          0.01mins 53.40% |   runtime.selectgo
+  0.02mins  1.06% 37.16%   0.02mins  1.06%                | runtime.lock
+----------------------------------------------------------+-------------
+                                          0.02mins 46.96% |   runtime.heapBitsSetType
+                                                 0  6.39% |   runtime.mallocgc
+  0.02mins  1.02% 38.18%   0.05mins  3.24%                | runtime.pcvalue
+                                          0.03mins 65.18% |   runtime.step
+----------------------------------------------------------+-------------
+                                          0.01mins 74.71% |   runtime.scanobject
+  0.01mins   0.9% 39.08%   0.01mins   0.9%                | runtime.markBits.isMarked
+----------------------------------------------------------+-------------
+  0.01mins  0.75% 39.84%   0.05mins  2.89%                | runtime.selectgo
+                                          0.01mins 19.64% |   runtime.lock
+                                                 0  4.29% |   runtime.findObject
+----------------------------------------------------------+-------------
+```
+
+![Workload e fire frame with filter syscall.Syscall|runtime.mallocgc|runtime.newobejct](./profiles/ycsb/tidb/workloade/workload_e_syscall&gc.png)
+
+从profile中可以得到以下信息：
+
 ##### 3.3.3.4 内存
 
+```bash
+# 根据执行申请内存逆序排列得到15项函数
+go tool pprof -nodecount 15 -flat -tree heap
+
+Showing nodes accounting for 36.96MB, 73.31% of 50.41MB total
+Showing top 15 nodes out of 310
+----------------------------------------------------------+-------------
+      flat  flat%   sum%        cum   cum%   calls calls% + context 	 	 
+----------------------------------------------------------+-------------
+    6.71MB 13.30% 13.30%     6.71MB 13.30%                | github.com/pingcap/tidb/util/arena.NewAllocator
+----------------------------------------------------------+-------------
+    5.59MB 11.08% 24.38%     5.59MB 11.08%                | bufio.NewWriterSize
+----------------------------------------------------------+-------------
+    5.59MB 11.08% 35.46%     5.59MB 11.08%                | github.com/pingcap/parser.New
+----------------------------------------------------------+-------------
+    4.57MB  9.07% 44.53%     4.57MB  9.07%                | bufio.NewReaderSize
+----------------------------------------------------------+-------------
+       2MB  3.97% 48.50%        2MB  3.97%                | github.com/pingcap/tidb/util/chunk.newVarLenColumn
+----------------------------------------------------------+-------------
+       2MB  3.97% 52.47%        3MB  5.95%                | github.com/pingcap/parser.yyParse
+                                               1MB 33.34% |   github.com/pingcap/tidb/types/parser_driver.newParamMarkerExpr
+----------------------------------------------------------+-------------
+                                               1MB 66.50% |   github.com/pingcap/tidb/statistics.PseudoTable
+    1.50MB  2.98% 55.45%     1.50MB  2.98%                | github.com/pingcap/tidb/util/chunk.newFixedLenColumn
+----------------------------------------------------------+-------------
+    1.50MB  2.98% 58.42%     1.50MB  2.98%                | github.com/pingcap/tidb/statistics.(*HistColl).GenerateHistCollFromColumnInfo
+----------------------------------------------------------+-------------
+    1.50MB  2.98% 61.40%     1.50MB  2.98%                | github.com/pingcap/tidb/planner/core.deriveLimitStats
+----------------------------------------------------------+-------------
+       1MB  1.99% 63.39%        1MB  1.99%                | github.com/pingcap/tidb/server.(*packetIO).readOnePacket
+----------------------------------------------------------+-------------
+       1MB  1.98% 65.37%        1MB  1.98%                | github.com/pingcap/tidb/planner/core.PhysicalIndexLookUpReader.Init
+----------------------------------------------------------+-------------
+                                               1MB   100% |   github.com/pingcap/parser.yyParse
+       1MB  1.98% 67.35%        1MB  1.98%                | github.com/pingcap/tidb/types/parser_driver.newParamMarkerExpr
+----------------------------------------------------------+-------------
+       1MB  1.98% 69.34%        1MB  1.98%                | github.com/pingcap/tidb/expression.ColumnInfos2ColumnsAndNames
+----------------------------------------------------------+-------------
+       1MB  1.98% 71.32%        2MB  3.97%                | github.com/pingcap/tidb/statistics.PseudoTable
+                                               1MB 50.00% |   github.com/pingcap/tidb/util/chunk.newFixedLenColumn
+----------------------------------------------------------+-------------
+       1MB  1.98% 73.31%        1MB  1.98%                | container/list.(*List).insertValue
+----------------------------------------------------------+-------------
+```
+
+![Workload e fire frame of memory alloc](./profiles/ycsb/tidb/workloade/workload_e_mem_alloc.png)
+
+![Workload e fire frame of memory use](./profiles/ycsb/tidb/workloade/workload_e_mem_use.png)
+
+从profile中可以得到以下信息：
+
 ##### 3.3.3.5 IO
+
+![Workload e disk performance](./profiles/ycsb/tidb/workloade/e_disk_perf.png)
+
+![Workload e tikv summart](./profiles/ycsb/tidb/workloade/e_tikv_summary.png)
+
+![Workload e tikv network](./profiles/ycsb/tidb/workloade/e_tikv_net.png)
+
+根据以上监控数据可以得出：
 
 ##### 3.3.4.6 结论
 
