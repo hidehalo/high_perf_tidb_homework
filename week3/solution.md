@@ -842,62 +842,100 @@ Showing top 15 nodes out of 316
 ----------------------------------------------------------+-------------
 ```
 
-![Workload e fire frame with filter syscall.Syscall|runtime.mallocgc|runtime.newobejct](./profiles/ycsb/tidb/workloade/workload_e_syscall&gc.png)
-
 从profile中可以得到以下信息：
 
 ##### 3.3.3.4 内存
 
 ```bash
-# 根据执行申请内存逆序排列得到15项函数
-go tool pprof -nodecount 15 -flat -tree heap
+go tool pprof -nodecount 20 -flat -text -alloc_space heap
 
-Showing nodes accounting for 36.96MB, 73.31% of 50.41MB total
-Showing top 15 nodes out of 310
-----------------------------------------------------------+-------------
-      flat  flat%   sum%        cum   cum%   calls calls% + context 	 	 
-----------------------------------------------------------+-------------
-    6.71MB 13.30% 13.30%     6.71MB 13.30%                | github.com/pingcap/tidb/util/arena.NewAllocator
-----------------------------------------------------------+-------------
-    5.59MB 11.08% 24.38%     5.59MB 11.08%                | bufio.NewWriterSize
-----------------------------------------------------------+-------------
-    5.59MB 11.08% 35.46%     5.59MB 11.08%                | github.com/pingcap/parser.New
-----------------------------------------------------------+-------------
-    4.57MB  9.07% 44.53%     4.57MB  9.07%                | bufio.NewReaderSize
-----------------------------------------------------------+-------------
-       2MB  3.97% 48.50%        2MB  3.97%                | github.com/pingcap/tidb/util/chunk.newVarLenColumn
-----------------------------------------------------------+-------------
-       2MB  3.97% 52.47%        3MB  5.95%                | github.com/pingcap/parser.yyParse
-                                               1MB 33.34% |   github.com/pingcap/tidb/types/parser_driver.newParamMarkerExpr
-----------------------------------------------------------+-------------
-                                               1MB 66.50% |   github.com/pingcap/tidb/statistics.PseudoTable
-    1.50MB  2.98% 55.45%     1.50MB  2.98%                | github.com/pingcap/tidb/util/chunk.newFixedLenColumn
-----------------------------------------------------------+-------------
-    1.50MB  2.98% 58.42%     1.50MB  2.98%                | github.com/pingcap/tidb/statistics.(*HistColl).GenerateHistCollFromColumnInfo
-----------------------------------------------------------+-------------
-    1.50MB  2.98% 61.40%     1.50MB  2.98%                | github.com/pingcap/tidb/planner/core.deriveLimitStats
-----------------------------------------------------------+-------------
-       1MB  1.99% 63.39%        1MB  1.99%                | github.com/pingcap/tidb/server.(*packetIO).readOnePacket
-----------------------------------------------------------+-------------
-       1MB  1.98% 65.37%        1MB  1.98%                | github.com/pingcap/tidb/planner/core.PhysicalIndexLookUpReader.Init
-----------------------------------------------------------+-------------
-                                               1MB   100% |   github.com/pingcap/parser.yyParse
-       1MB  1.98% 67.35%        1MB  1.98%                | github.com/pingcap/tidb/types/parser_driver.newParamMarkerExpr
-----------------------------------------------------------+-------------
-       1MB  1.98% 69.34%        1MB  1.98%                | github.com/pingcap/tidb/expression.ColumnInfos2ColumnsAndNames
-----------------------------------------------------------+-------------
-       1MB  1.98% 71.32%        2MB  3.97%                | github.com/pingcap/tidb/statistics.PseudoTable
-                                               1MB 50.00% |   github.com/pingcap/tidb/util/chunk.newFixedLenColumn
-----------------------------------------------------------+-------------
-       1MB  1.98% 73.31%        1MB  1.98%                | container/list.(*List).insertValue
-----------------------------------------------------------+-------------
+Showing nodes accounting for 70.64GB, 51.78% of 136.44GB total
+Dropped 1444 nodes (cum <= 0.68GB)
+Showing top 20 nodes out of 260
+      flat  flat%   sum%        cum   cum%
+   19.86GB 14.56% 14.56%    19.86GB 14.56%  github.com/pingcap/tidb/util/chunk.newVarLenColumn
+   10.95GB  8.02% 22.58%    11.25GB  8.24%  github.com/pingcap/tidb/executor.(*indexWorker).extractTaskHandles
+    7.55GB  5.53% 28.12%     7.55GB  5.53%  github.com/pingcap/tidb/util/chunk.newFixedLenColumn
+    3.71GB  2.72% 30.83%     5.82GB  4.26%  github.com/pingcap/tidb/planner/core.(*PlanBuilder).buildDataSource
+    3.61GB  2.65% 33.48%     3.61GB  2.65%  github.com/pingcap/tidb/statistics/handle.statsCache.copy
+    3.59GB  2.63% 36.11%     3.59GB  2.63%  github.com/pingcap/tidb/expression.(*Column).Clone
+    2.32GB  1.70% 37.81%     2.33GB  1.71%  google.golang.org/grpc.(*parser).recvMsg
+    1.92GB  1.41% 39.22%     1.92GB  1.41%  github.com/prometheus/client_golang/prometheus.(*histogram).Write
+    1.89GB  1.38% 40.60%     1.89GB  1.39%  fmt.Sprintf
+    1.73GB  1.27% 41.87%     2.40GB  1.76%  github.com/pingcap/tidb/executor.ResetContextOfStmt
+    1.69GB  1.24% 43.11%     8.82GB  6.47%  github.com/pingcap/tidb/statistics/handle.(*Handle).HandleAutoAnalyze
+    1.42GB  1.04% 44.15%     1.43GB  1.05%  github.com/pingcap/tidb/util/chunk.(*Column).AppendBytes
+    1.35GB  0.99% 45.15%     1.35GB  0.99%  github.com/pingcap/tidb/planner/core.NewPlanBuilder
+    1.35GB  0.99% 46.13%     1.53GB  1.12%  google.golang.org/grpc/internal/transport.(*http2Client).Write
+    1.34GB  0.98% 47.11%     1.34GB  0.98%  github.com/pingcap/kvproto/pkg/kvrpcpb.(*GetResponse).Unmarshal
+    1.33GB  0.98% 48.09%     1.33GB  0.98%  github.com/pingcap/tidb/statistics.(*HistColl).GenerateHistCollFromColumnInfo
+    1.32GB  0.96% 49.05%     1.32GB  0.96%  github.com/pingcap/tidb/util/memory.NewTracker
+    1.29GB  0.95% 50.00%     2.40GB  1.76%  github.com/pingcap/tidb/planner/core.buildSchemaFromFields
+    1.21GB  0.89% 50.89%     1.21GB  0.89%  github.com/pingcap/tidb/infoschema.(*infoSchema).SchemaTables
+    1.21GB  0.89% 51.78%     1.21GB  0.89%  github.com/pingcap/tidb/planner/property.(*StatsInfo).Scale
 ```
 
-![Workload e fire frame of memory alloc](./profiles/ycsb/tidb/workloade/workload_e_mem_alloc.png)
+```bash
+go tool pprof -nodecount 20 -cum -text -alloc_space heap
 
-![Workload e fire frame of memory use](./profiles/ycsb/tidb/workloade/workload_e_mem_use.png)
+Showing nodes accounting for 21.88GB, 16.03% of 136.44GB total
+Dropped 1444 nodes (cum <= 0.68GB)
+Showing top 20 nodes out of 260
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%    63.54GB 46.57%  github.com/pingcap/tidb/server.(*Server).onConn
+         0     0%     0%    63.51GB 46.55%  github.com/pingcap/tidb/server.(*clientConn).Run
+         0     0%     0%    63.38GB 46.45%  github.com/pingcap/tidb/server.(*clientConn).dispatch
+    0.22GB  0.16%  0.16%    62.92GB 46.12%  github.com/pingcap/tidb/server.(*clientConn).handleStmtExecute
+    0.14GB   0.1%  0.26%    47.12GB 34.53%  github.com/pingcap/tidb/server.(*TiDBStatement).Execute
+         0     0%  0.26%    46.98GB 34.43%  github.com/pingcap/tidb/session.(*session).ExecutePreparedStmt
+         0     0%  0.26%    42.79GB 31.36%  github.com/pingcap/tidb/session.(*session).CommonExec
+         0     0%  0.26%    32.26GB 23.65%  github.com/pingcap/tidb/planner.Optimize
+    0.13GB 0.097%  0.36%    31.67GB 23.21%  github.com/pingcap/tidb/planner.optimize
+    0.39GB  0.28%  0.64%    29.82GB 21.86%  github.com/pingcap/tidb/executor.CompileExecutePreparedStmt
+    1.10GB  0.81%  1.45%    28.19GB 20.66%  github.com/pingcap/tidb/util/chunk.New
+         0     0%  1.45%    27.41GB 20.09%  github.com/pingcap/tidb/util/chunk.newColumn
+         0     0%  1.45%    27.09GB 19.86%  github.com/pingcap/tidb/util/chunk.NewColumn
+         0     0%  1.45%    26.16GB 19.18%  github.com/pingcap/tidb/planner/core.(*Execute).OptimizePreparedPlan
+         0     0%  1.45%    26.16GB 19.18%  github.com/pingcap/tidb/planner/core.(*Execute).getPhysicalPlan
+         0     0%  1.45%    21.92GB 16.07%  github.com/pingcap/tidb/executor.newFirstChunk
+   19.86GB 14.56% 16.01%    19.86GB 14.56%  github.com/pingcap/tidb/util/chunk.newVarLenColumn
+    0.03GB 0.022% 16.03%    17.83GB 13.06%  github.com/pingcap/tidb/session.runStmt
+         0     0% 16.03%    17.31GB 12.69%  github.com/pingcap/tidb/executor.(*IndexLookUpExecutor).startIndexWorker.func1
+         0     0% 16.03%    17.25GB 12.65%  github.com/pingcap/tidb/executor.(*indexWorker).fetchHandles
+```
+
+```bash
+go tool pprof -nodecount 20 -flat -text -inuse_space heap
+
+Showing nodes accounting for 40860.97kB, 79.15% of 51623.02kB total
+Showing top 20 nodes out of 310
+      flat  flat%   sum%        cum   cum%
+ 6866.17kB 13.30% 13.30%  6866.17kB 13.30%  github.com/pingcap/tidb/util/arena.NewAllocator
+ 5720.46kB 11.08% 24.38%  5720.46kB 11.08%  bufio.NewWriterSize
+ 5720.46kB 11.08% 35.46%  5720.46kB 11.08%  github.com/pingcap/parser.New
+ 4680.37kB  9.07% 44.53%  4680.37kB  9.07%  bufio.NewReaderSize
+ 2048.36kB  3.97% 48.50%  2048.36kB  3.97%  github.com/pingcap/tidb/util/chunk.newVarLenColumn
+ 2048.25kB  3.97% 52.47%  3072.47kB  5.95%  github.com/pingcap/parser.yyParse
+ 1540.12kB  2.98% 55.45%  1540.12kB  2.98%  github.com/pingcap/tidb/util/chunk.newFixedLenColumn
+ 1536.42kB  2.98% 58.42%  1536.42kB  2.98%  github.com/pingcap/tidb/statistics.(*HistColl).GenerateHistCollFromColumnInfo
+ 1536.30kB  2.98% 61.40%  1536.30kB  2.98%  github.com/pingcap/tidb/planner/core.deriveLimitStats
+ 1025.12kB  1.99% 63.39%  1025.12kB  1.99%  github.com/pingcap/tidb/server.(*packetIO).readOnePacket
+ 1024.22kB  1.98% 65.37%  1024.22kB  1.98%  github.com/pingcap/tidb/planner/core.PhysicalIndexLookUpReader.Init
+ 1024.22kB  1.98% 67.35%  1024.22kB  1.98%  github.com/pingcap/tidb/types/parser_driver.newParamMarkerExpr
+ 1024.16kB  1.98% 69.34%  1024.16kB  1.98%  github.com/pingcap/tidb/expression.ColumnInfos2ColumnsAndNames
+ 1024.15kB  1.98% 71.32%  2048.26kB  3.97%  github.com/pingcap/tidb/statistics.PseudoTable
+ 1024.05kB  1.98% 73.31%  1024.05kB  1.98%  container/list.(*List).insertValue
+  902.59kB  1.75% 75.05%   902.59kB  1.75%  compress/flate.NewWriter
+  544.67kB  1.06% 76.11%   544.67kB  1.06%  google.golang.org/grpc/internal/transport.newBufWriter
+  528.17kB  1.02% 77.13%   528.17kB  1.02%  github.com/pingcap/tidb/types.BinaryLiteral.ToString
+  522.70kB  1.01% 78.15%   522.70kB  1.01%  golang.org/x/net/http2.(*Framer).WriteDataPadded
+  520.04kB  1.01% 79.15%   520.04kB  1.01%  golang.org/x/net/http2.NewFramer.func1
+```
 
 从profile中可以得到以下信息：
+
+1. chunk.newVarLenColumn、executor.(*indexWorker).extractTaskHandles、chunk.newFixedLenColumn集中申请了大部分的内存
+2. 大部分申请内存的需求都是在planner.Optimize、executor.(*indexWorker).fetchHandles中产生的
 
 ##### 3.3.3.5 IO
 
