@@ -38,7 +38,7 @@ issue 描述应包含：
 | 192.168.99.103    | Grafana Server        | -             | -             | -  |
 | 192.168.99.103    | Alertmanager Server   | -             | -             | -  |
 
-### 2.1 TiDB&TiKV服务器配置
+### 2.1 服务器配置
 
 ```yaml
 server_configs:
@@ -68,7 +68,7 @@ server_configs:
 
 ## 3. 使用Go-YCSB进行压测及分析
 
-Go-YCSB共有a-f六种负载，每种负载都由至少一种SQL命令按比例组合而成，不进行投影，请求量/时间呈正态分布。以下测试均采用256个线程模拟并发。
+Go-YCSB共有a-f六种负载，每种负载都由至少一种SQL命令按比例组合而成，不进行投影，请求量/时间呈正态分布。以下测试均采用256个线程模拟并发，本次报告的性能分析对象是TiDB。
 
 ```bash
 ./bin/go-ycsb run mysql -P workloads/workloadx
@@ -77,9 +77,9 @@ Go-YCSB共有a-f六种负载，每种负载都由至少一种SQL命令按比例�
   -p mysql.port=4000 --threads 256
 ```
 
-## 3.1 数据模式及数据集大小
+### 3.1 数据模式及数据集大小
 
-### 3.1.1 数据模式
+#### 3.1.1 数据模式
 
 usertable(<u style="color:red;">YCSB_KEY</u>, FIELD0, FIELD1, FIELD2, FIELD3, FIELD4, FIELD5, FIELD6, FIELD7, FIELD8, FIELD9)
 
@@ -100,13 +100,13 @@ CREATE TABLE usertable (
 );
 ```
 
-### 3.1.2 数据集大小
+#### 3.1.2 数据集大小
 
 ```sql
 mysql> select count(1) from usertable;
 ```
 
-```shell
+```bash
 +----------+
 | count(1) | 
 +----------+
@@ -114,45 +114,45 @@ mysql> select count(1) from usertable;
 +----------+
 ```
 
-## 3.2 Workload涉及的SQL
+### 3.2 Workload涉及的SQL
 
 Go-YCSB负载有`Read`(点查询)、`Scan`(范围查询)、`Insert`、`Update`(点查询)、`Delete`(点查询)，以下会列出对应的SQL模板。
 
-### 3.2.1 Read
+#### 3.2.1 Read
 
 ```sql
 SELECT $fields FROM $table $forceIndexKey WHERE YCSB_KEY = ?
 ```
 
-### 3.2.2 Scan
+#### 3.2.2 Scan
 
 ```sql
 SELECT $fields FROM $table $forceIndexKey WHERE YCSB_KEY >= ? LIMIT ?
 ```
 
-### 3.2.3 Insert
+#### 3.2.3 Insert
 
 ```sql
 INSERT IGNORE INTO $table ($field1, $field2, ...) VALUES (?, ?, ...)
 ```
 
-### 3.2.4 Update
+#### 3.2.4 Update
 
 ```sql
 UPDATE $table set $field1 = ?, $field2 = ? ... WHERE YCSB_KEY = ?
 ```
 
-### 3.2.5 Delete
+#### 3.2.5 Delete
 
 ```sql
 DELETE FROM $table WHERE YCSB_KEY = ?
 ```
 
-## 3.3 TiDB profile采集与分析
+### 3.3 TiDB profile采集与分析
 
-### 3.3.1 Workload a
+#### 3.3.1 Workload a
 
-#### 3.3.1.1 负载配置
+##### 3.3.1.1 负载配置
 
 ```bash
 "threadcount"="256"
@@ -170,18 +170,16 @@ DELETE FROM $table WHERE YCSB_KEY = ?
 "readallfields"="true"
 ```
 
-#### 3.3.1.2 压测结果
+##### 3.3.1.2 压测结果
 
 ```bash
 READ   - Takes(s): 215.8, Count: 115432, OPS: 535.0, Avg(us): 115576, Min(us): 1795, Max(us): 5059776, 99th(us): 357000, 99.9th(us): 1072000, 99.99th(us): 2871000
 UPDATE - Takes(s): 211.6, Count: 114645, OPS: 541.9, Avg(us): 347580, Min(us): 8232, Max(us): 13621982, 99th(us): 1335000, 99.9th(us): 4250000, 99.99th(us): 7361000
 ```
 
-### 3.3.1.3 分析
+##### 3.3.1.3 CPU
 
-#### 3.3.1.3.1 CPU
-
-```shell
+```bash
 # 根据执行加调用外部函数时长逆序排列得到前15项函数
 go tool pprof -nodecount 15 -cum -tree  profile
 
@@ -258,7 +256,7 @@ Showing top 15 nodes out of 293
 ----------------------------------------------------------+-------------
 ```
 
-```shell
+```bash
 # 根据执行时长逆序排列得到15项函数
 go tool pprof -nodecount 15 -flat -tree  profile
 
@@ -331,9 +329,9 @@ Showing top 15 nodes out of 293
     - net.(*conn).Write
 4. runtime.mallocgc和runtime.newobject代表内存管理的开销，它消耗了程序20.34%的时间
 
-#### 3.3.1.3.2 内存
+##### 3.3.1.4 内存
 
-```shell
+```bash
 # 根据执行申请内存逆序排列得到15项函数
 go tool pprof -nodecount 15 -flat -tree heap
 
@@ -395,13 +393,9 @@ Showing top 15 nodes out of 269
     - core.buildSchemaFromFields
     - core.buildPointUpdatePlan
 
-#### 3.3.1.3.3 IO
-
-##### 3.3.1.3.3.1 磁盘性能
+##### 3.3.1.5 IO
 
 ![Workload a disk performance](./profiles/ycsb/tidb/workloada/a_disk_perf.png)
-
-##### 3.3.1.3.3.2 TiKV summary
 
 ![Workload a tikv summart](./profiles/ycsb/tidb/workloada/a_tikv_summary.png)
 
@@ -414,15 +408,15 @@ Showing top 15 nodes out of 269
 3. 磁盘带宽非常低，应该大约等同于网络带宽
 4. 写入操作的IOPS非常高
 
-### 3.3.3.1.4 结论
+##### 3.3.1.6 结论
 
 Workload a是50%的`Read`操作和50%的`Update`操作组成的负载，在当前拓扑下IO开销占了不小比重，可能主要是由于设备磁盘性能的不足。在SQL计算程序上，对内存的管理或许还有优化空间。
 
 ---
 
-### 3.3.2 Workload c
+#### 3.3.2 Workload c
 
-#### 3.3.2.1 负载配置
+##### 3.3.2.1 负载配置
 
 ```bash
 "updateproportion"="0"
@@ -440,17 +434,15 @@ Workload a是50%的`Read`操作和50%的`Update`操作组成的负载，在当�
 "readproportion"="1"
 ```
 
-#### 3.3.2.2 压测结果
+##### 3.3.2.2 压测结果
 
 ```bash
 READ   - Takes(s): 399.5, Count: 999936, OPS: 2502.9, Avg(us): 97998, Min(us): 1923, Max(us): 20546032, 99th(us): 163000, 99.9th(us): 5863000, 99.99th(us): 20444000
 ```
 
-### 3.3.2.3 分析
+##### 3.3.2.3 CPU
 
-#### 3.3.2.3.1 CPU
-
-```shell
+```bash
 # 根据执行加调用外部函数时长逆序排列得到前15项函数
 go tool pprof -tree -cum -nodecount 15 profile
 
@@ -523,7 +515,7 @@ Showing top 15 nodes out of 218
 ----------------------------------------------------------+-------------
 ```
 
-```shell
+```bash
 # 根据执行时长逆序排列得到15项函数
 go tool pprof -tree -flat -nodecount 15 profile
 
@@ -585,9 +577,9 @@ Showing top 15 nodes out of 218
 
 从profile中可以得到以下信息：
 
-#### 3.3.2.3.2 内存
+##### 3.3.2.4内存
 
-```shell
+```bash
 # 根据执行申请内存逆序排列得到15项函数
 go tool pprof -nodecount 15 -flat -tree heap
 
@@ -636,45 +628,40 @@ Showing top 15 nodes out of 230
 
 从profile中可以得到以下信息：
 
-#### 3.3.2.3.3 IO
-
-##### 3.3.2.3.3.1 磁盘性能
+##### 3.3.2.5 IO
 
 ![Workload c disk performance](./profiles/ycsb/tidb/workloadc/c_disk_perf.png)
-
-##### 3.3.2.3.3.2 TiKV summary
 
 ![Workload c tikv summart](./profiles/ycsb/tidb/workloadc/c_tikv_summary.png)
 
 ![Workload c tikv network](./profiles/ycsb/tidb/workloadc/c_tikv_net.png)
 
-### 3.3.2.4 结论
+##### 3.3.2.6 结论
 
 Workload c是100%的`Read`操作的负载，QPS相较于workload a大幅提升。
 
 ---
 
-### 3.3.3 Workload e
+#### 3.3.3 Workload e
 
-#### 3.3.3.1 负载配置
-
-```bash
-
-```
-
-#### 3.3.3.2 压测结果
+##### 3.3.3.1 负载配置
 
 ```bash
 
 ```
 
-### 3.3.43 TiDB profile of workload e
+##### 3.3.3.2 压测结果
 
+```bash
 
-### 3.3.4.4 分析
+```
+##### 3.3.3.3 CPU
 
+##### 3.3.3.4 内存
 
-### 3.3.4.5 结论
+##### 3.3.3.5 IO
+
+##### 3.3.4.6 结论
 
 Workload e是95%的`Scan`操作和5%的`Insert`操作组成的负载
 
