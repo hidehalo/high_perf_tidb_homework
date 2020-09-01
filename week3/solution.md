@@ -177,256 +177,506 @@ READ   - Takes(s): 215.8, Count: 115432, OPS: 535.0, Avg(us): 115576, Min(us): 1
 UPDATE - Takes(s): 211.6, Count: 114645, OPS: 541.9, Avg(us): 347580, Min(us): 8232, Max(us): 13621982, 99th(us): 1335000, 99.9th(us): 4250000, 99.99th(us): 7361000
 ```
 
-### 3.3.1.1 TiDB profile of workload a
+### 3.3.1.3 分析
 
-![YCSB workload a TiDB profile](./profiles/ycsb/tidb/workloada/profile001.svg)
+#### 3.3.1.3.1 CPU
 
-### 3.3.1.2 分析
+```shell
+# 根据执行加调用外部函数时长逆序排列得到前15项函数
+go tool pprof -nodecount 15 -cum -tree  profile
 
-#### 3.3.1.2.1 CPU
-
-Workload a是50%的`Read`操作和50%的`Update`操作组成的负载，从profile中可以得到以下信息：
-
-1. 采样了120秒，采集样本只有6.07秒，TiDB的CPU使用率非常低
-2. 样本的时间消耗主要聚集在
-    1. session.session.CommonExec 23.56%
-    2. runtime.mallocgc 14.17%
-    3. runtime.scanobject 11.2%
-    4. net.conn.Write 10.05%
-    5. server.clientConn.writeResult 9.56%
-
-#### 3.3.1.2.2 内存
-
-TODO
-
-#### 3.3.1.2.3 IO
-
-TODO
-
-### 3.3.1.3 结论
-
-Workload a下主要CPU消耗使用在执行SQL计算、内存分配和GC上了，其余一小部分的开销主要在网络IO上。
-SQL计算开销对应的是session.session.CommonExec执行的时间，内存分配和GC开销对应的是runtime.mallocgc与runtime.scanobject执行时间之和，网络IO的开销大约小于等于syscall.Syscall的执行时间。
-session.session.CommonExec又可以细分成plan.Optimize(9.88%)、executor.ExecStmt.Exec(11.53%)
-因此，假设优化相同比例的开销，内存分配与GC的耗时占比比较大，减少内存的消耗可以作为优先的优化规则。其次是网络IO、查询执行器、查询计划优化器。
-
-### 3.3.2 Workload b
-
-```bash
-# Yahoo! Cloud System Benchmark
-# Workload B: Read mostly workload
-#   Application example: photo tagging; add a tag is an update, but most operations are to read tags
-#                        
-#   Read/update ratio: 95/5
-#   Default data size: 1 KB records (10 fields, 100 bytes each, plus key)
-#   Request distribution: zipfian
-
-recordcount=1000
-operationcount=1000
-workload=core
-
-readallfields=true
-
-readproportion=0.95
-updateproportion=0.05
-scanproportion=0
-insertproportion=0
-
-requestdistribution=uniform
+Duration: 2mins, Total samples = 76.57s (63.73%)
+Showing nodes accounting for 17.09s, 22.32% of 76.57s total
+Dropped 1095 nodes (cum <= 0.38s)
+Showing top 15 nodes out of 293
+----------------------------------------------------------+-------------
+      flat  flat%   sum%        cum   cum%   calls calls% + context 	 	 
+----------------------------------------------------------+-------------
+         0     0%     0%     51.76s 67.60%                | github.com/pingcap/tidb/server.(*Server).onConn
+                                            51.76s   100% |   github.com/pingcap/tidb/server.(*clientConn).Run
+----------------------------------------------------------+-------------
+                                            51.76s   100% |   github.com/pingcap/tidb/server.(*Server).onConn
+     0.16s  0.21%  0.21%     51.76s 67.60%                | github.com/pingcap/tidb/server.(*clientConn).Run
+                                            48.70s 94.09% |   github.com/pingcap/tidb/server.(*clientConn).dispatch
+                                             1.34s  2.59% |   syscall.Syscall
+----------------------------------------------------------+-------------
+                                            48.70s   100% |   github.com/pingcap/tidb/server.(*clientConn).Run
+     0.10s  0.13%  0.34%     48.70s 63.60%                | github.com/pingcap/tidb/server.(*clientConn).dispatch
+                                            47.72s 97.99% |   github.com/pingcap/tidb/server.(*clientConn).handleStmtExecute
+----------------------------------------------------------+-------------
+                                            47.72s   100% |   github.com/pingcap/tidb/server.(*clientConn).dispatch
+     0.08s   0.1%  0.44%     47.72s 62.32%                | github.com/pingcap/tidb/server.(*clientConn).handleStmtExecute
+                                            30.77s 64.48% |   github.com/pingcap/tidb/server.(*TiDBStatement).Execute
+                                             9.33s 19.55% |   net.(*conn).Write
+----------------------------------------------------------+-------------
+                                            30.77s   100% |   github.com/pingcap/tidb/server.(*clientConn).handleStmtExecute
+         0     0%  0.44%     30.77s 40.19%                | github.com/pingcap/tidb/server.(*TiDBStatement).Execute
+                                            30.76s   100% |   github.com/pingcap/tidb/session.(*session).ExecutePreparedStmt
+----------------------------------------------------------+-------------
+                                            30.76s   100% |   github.com/pingcap/tidb/server.(*TiDBStatement).Execute
+     0.07s 0.091%  0.54%     30.76s 40.17%                | github.com/pingcap/tidb/session.(*session).ExecutePreparedStmt
+                                            26.58s 86.41% |   github.com/pingcap/tidb/session.(*session).CachedPlanExec
+                                             1.87s  6.08% |   github.com/pingcap/tidb/session.runStmt
+----------------------------------------------------------+-------------
+                                            25.18s 93.05% |   github.com/pingcap/tidb/session.(*session).CachedPlanExec
+                                             1.87s  6.91% |   github.com/pingcap/tidb/session.(*session).ExecutePreparedStmt
+     0.06s 0.078%  0.61%     27.06s 35.34%                | github.com/pingcap/tidb/session.runStmt
+                                            14.09s 52.07% |   github.com/pingcap/tidb/executor.(*ExecStmt).Exec
+                                             0.47s  1.74% |   internal/poll.(*FD).Write
+----------------------------------------------------------+-------------
+                                            26.58s   100% |   github.com/pingcap/tidb/session.(*session).ExecutePreparedStmt
+     0.03s 0.039%  0.65%     26.58s 34.71%                | github.com/pingcap/tidb/session.(*session).CachedPlanExec
+                                            25.18s 94.73% |   github.com/pingcap/tidb/session.runStmt
+----------------------------------------------------------+-------------
+                                            14.48s 85.33% |   syscall.write
+                                             1.34s  7.90% |   github.com/pingcap/tidb/server.(*clientConn).Run
+    16.35s 21.35% 22.01%     16.97s 22.16%                | syscall.Syscall
+----------------------------------------------------------+-------------
+                                            14.11s 95.60% |   net.(*netFD).Write
+                                             0.47s  3.18% |   github.com/pingcap/tidb/session.runStmt
+     0.02s 0.026% 22.03%     14.76s 19.28%                | internal/poll.(*FD).Write
+                                            14.50s 98.24% |   syscall.Write
+----------------------------------------------------------+-------------
+                                            14.50s   100% |   internal/poll.(*FD).Write
+         0     0% 22.03%     14.50s 18.94%                | syscall.Write
+                                            14.50s   100% |   syscall.write
+----------------------------------------------------------+-------------
+                                            14.50s   100% |   syscall.Write
+     0.02s 0.026% 22.06%     14.50s 18.94%                | syscall.write
+                                            14.48s 99.86% |   syscall.Syscall
+----------------------------------------------------------+-------------
+                                             9.33s 65.75% |   github.com/pingcap/tidb/server.(*clientConn).handleStmtExecute
+     0.03s 0.039% 22.10%     14.19s 18.53%                | net.(*conn).Write
+                                            14.16s 99.79% |   net.(*netFD).Write
+----------------------------------------------------------+-------------
+                                            14.16s   100% |   net.(*conn).Write
+     0.05s 0.065% 22.16%     14.16s 18.49%                | net.(*netFD).Write
+                                            14.11s 99.65% |   internal/poll.(*FD).Write
+----------------------------------------------------------+-------------
+                                            14.09s   100% |   github.com/pingcap/tidb/session.runStmt
+     0.12s  0.16% 22.32%     14.09s 18.40%                | github.com/pingcap/tidb/executor.(*ExecStmt).Exec
+----------------------------------------------------------+-------------
 ```
 
-### 3.3.2.1 TiDB profile of workload b
+```shell
+# 根据执行时长逆序排列得到15项函数
+go tool pprof -nodecount 15 -flat -tree  profile
 
-![YCSB workload b TiDB profile](./profiles/ycsb/tidb/b.svg)
-
-### 3.3.2.2 分析
-
-Workload b是95%的`Read`操作和5%的`Update`操作组成的负载，从profile中可以得到以下信息：
-
-1. 采样了120秒，采集样本85.54秒，TiDB的CPU使用率高达71.19%
-2. 相较于`Update`操作较繁重的workload a，减少`Update`操作的workload b显著的提高了CPU的利用率
-3. 样本的时间消耗主要聚集在
-
-### 3.3.2.3 结论
-
-TODO
-
-### 3.3.3 Workload c
-
-```bash
-# Yahoo! Cloud System Benchmark
-# Workload C: Read only
-#   Application example: user profile cache, where profiles are constructed elsewhere (e.g., Hadoop)
-#                        
-#   Read/update ratio: 100/0
-#   Default data size: 1 KB records (10 fields, 100 bytes each, plus key)
-#   Request distribution: zipfian
-
-recordcount=1000
-operationcount=1000
-workload=core
-
-readallfields=true
-
-readproportion=1
-updateproportion=0
-scanproportion=0
-insertproportion=0
-
-requestdistribution=uniform
+Duration: 2mins, Total samples = 76.57s (63.73%)
+Showing nodes accounting for 33.51s, 43.76% of 76.57s total
+Dropped 1095 nodes (cum <= 0.38s)
+Showing top 15 nodes out of 293
+----------------------------------------------------------+-------------
+      flat  flat%   sum%        cum   cum%   calls calls% + context 	 	 
+----------------------------------------------------------+-------------
+    16.35s 21.35% 21.35%     16.97s 22.16%                | syscall.Syscall
+----------------------------------------------------------+-------------
+                                             1.54s 29.73% |   runtime.mallocgc
+     2.49s  3.25% 24.60%      5.18s  6.77%                | runtime.scanobject
+                                             1.60s 30.89% |   runtime.findObject
+----------------------------------------------------------+-------------
+                                             1.60s 66.67% |   runtime.scanobject
+                                             0.17s  7.08% |   runtime.selectgo
+     2.16s  2.82% 27.43%      2.40s  3.13%                | runtime.findObject
+----------------------------------------------------------+-------------
+                                             6.54s 62.95% |   runtime.newobject
+     2.08s  2.72% 30.14%     10.39s 13.57%                | runtime.mallocgc
+                                             2.01s 19.35% |   runtime.heapBitsSetType
+                                             1.54s 14.82% |   runtime.scanobject
+                                             1.52s 14.63% |   runtime.nextFreeFast
+                                             1.21s 11.65% |   runtime.memclrNoHeapPointers
+----------------------------------------------------------+-------------
+                                             1.52s   100% |   runtime.mallocgc
+     1.52s  1.99% 32.13%      1.52s  1.99%                | runtime.nextFreeFast
+----------------------------------------------------------+-------------
+                                             2.01s   100% |   runtime.mallocgc
+     1.42s  1.85% 33.98%      2.01s  2.63%                | runtime.heapBitsSetType
+----------------------------------------------------------+-------------
+                                             1.21s 96.03% |   runtime.mallocgc
+     1.26s  1.65% 35.63%      1.26s  1.65%                | runtime.memclrNoHeapPointers
+----------------------------------------------------------+-------------
+     1.22s  1.59% 37.22%      7.76s 10.13%                | runtime.newobject
+                                             6.54s 84.28% |   runtime.mallocgc
+----------------------------------------------------------+-------------
+     1.12s  1.46% 38.68%      1.12s  1.46%                | runtime.memmove
+----------------------------------------------------------+-------------
+                                             0.80s   100% |   runtime.getitab
+     0.79s  1.03% 39.72%      0.80s  1.04%                | runtime.(*itabTableType).find
+----------------------------------------------------------+-------------
+     0.73s  0.95% 40.67%      2.36s  3.08%                | runtime.selectgo
+                                             0.29s 12.29% |   runtime.lock
+                                             0.17s  7.20% |   runtime.findObject
+----------------------------------------------------------+-------------
+     0.70s  0.91% 41.58%      0.75s  0.98%                | context.(*valueCtx).Value
+----------------------------------------------------------+-------------
+                                             0.29s 49.15% |   runtime.selectgo
+     0.59s  0.77% 42.35%      0.59s  0.77%                | runtime.lock
+----------------------------------------------------------+-------------
+     0.54s  0.71% 43.06%      1.34s  1.75%                | runtime.getitab
+                                             0.80s 59.70% |   runtime.(*itabTableType).find
+----------------------------------------------------------+-------------
+     0.54s  0.71% 43.76%      0.63s  0.82%                | runtime.step
+----------------------------------------------------------+-------------
 ```
 
-### 3.3.3.1 TiDB profile of workload c
+![Workload a fire frame with filter syscall.Syscall](./profiles/ycsb/tidb/workloada/workload_a_syscall.png)
 
-![YCSB workload c TiDB profile](./profiles/ycsb/tidb/c.svg)
+从profile中可以得到以下信息：
 
-### 3.3.3.2 分析
+1. 采样了120秒，采集样本76.57秒，TiDB的CPU使用率高达63.73%
+2. 样本的时间消耗主要聚集在server.(*clientConn).handleStmtExecute及其调用的子函数
+3. syscall.Syscall代表IO的开销，它消耗了程序22.16%的时间，并且主要集中在
+    - server.(\*clientConn).writeOK
+    - server.(\*clientConn).writeResultSet
+    - net.(*conn).Write
+4. runtime.mallocgc和runtime.newobject代表内存管理的开销，它消耗了程序20.34%的时间
 
-Workload c是100%的`Read`操作的负载，从profile中可以得到以下信息：
+#### 3.3.1.3.2 内存
 
-1. 采样了120秒，采集样本87.22秒，TiDB的CPU使用率高达72.57%
-2. 相较于拥有少量`Update`操作的workload b，workload c的CPU使用率非常相近，少量的`Update`操作对`Read`操作的影响很小
-3. 样本的时间消耗主要聚集在
+```shell
+# 根据执行申请内存逆序排列得到15项函数
+go tool pprof -nodecount 15 -flat -tree heap
 
-### 3.3.3.3 结论
-
-TODO
-
-### 3.3.4 Workload d
-
-```bash
-# Yahoo! Cloud System Benchmark
-# Workload D: Read latest workload
-#   Application example: user status updates; people want to read the latest
-#                        
-#   Read/update/insert ratio: 95/0/5
-#   Default data size: 1 KB records (10 fields, 100 bytes each, plus key)
-#   Request distribution: latest
-
-# The insert order for this is hashed, not ordered. The "latest" items may be 
-# scattered around the keyspace if they are keyed by userid.timestamp. A workload
-# which orders items purely by time, and demands the latest, is very different than 
-# workload here (which we believe is more typical of how people build systems.)
-
-recordcount=1000
-operationcount=1000
-workload=core
-
-readallfields=true
-
-readproportion=0.95
-updateproportion=0
-scanproportion=0
-insertproportion=0.05
-
-requestdistribution=latest
+Showing nodes accounting for 49.94MB, 59.85% of 83.43MB total
+Showing top 15 nodes out of 269
+----------------------------------------------------------+-------------
+      flat  flat%   sum%        cum   cum%   calls calls% + context 	 	 
+----------------------------------------------------------+-------------
+      10MB 11.99% 11.99%    16.50MB 19.78%                | github.com/pingcap/tidb/planner/core.buildSchemaFromFields
+                                               6MB 36.36% |   github.com/pingcap/tidb/planner/core.colInfoToColumn
+----------------------------------------------------------+-------------
+    7.74MB  9.27% 21.26%     7.74MB  9.27%                | github.com/pingcap/tidb/util/arena.NewAllocator
+----------------------------------------------------------+-------------
+                                               6MB   100% |   github.com/pingcap/tidb/planner/core.buildSchemaFromFields
+       6MB  7.19% 28.45%        6MB  7.19%                | github.com/pingcap/tidb/planner/core.colInfoToColumn
+----------------------------------------------------------+-------------
+    4.06MB  4.87% 33.32%     4.06MB  4.87%                | bufio.NewReaderSize
+----------------------------------------------------------+-------------
+                                            4.50MB   100% |   github.com/pingcap/tidb/server.(*TiDBContext).Prepare
+    3.50MB  4.20% 37.52%     4.50MB  5.39%                | github.com/pingcap/parser.yyParse
+----------------------------------------------------------+-------------
+    2.54MB  3.04% 40.56%     2.54MB  3.04%                | bufio.NewWriterSize
+----------------------------------------------------------+-------------
+    2.54MB  3.04% 43.61%     2.54MB  3.04%                | github.com/pingcap/parser.New
+----------------------------------------------------------+-------------
+    2.50MB  3.00% 46.60%    11.50MB 13.79%                | github.com/pingcap/tidb/planner/core.buildPointUpdatePlan
+                                               6MB 52.17% |   github.com/pingcap/tidb/expression.BuildCastFunction
+                                            1.50MB 13.04% |   github.com/pingcap/tidb/expression.ParamMarkerExpression
+----------------------------------------------------------+-------------
+                                               2MB   100% |   github.com/pingcap/tidb/expression.BuildCastFunction
+       2MB  2.40% 49.00%        2MB  2.40%                | github.com/pingcap/tidb/expression.foldConstant
+----------------------------------------------------------+-------------
+    1.55MB  1.86% 50.86%     1.55MB  1.86%                | bytes.makeSlice
+----------------------------------------------------------+-------------
+    1.50MB  1.80% 52.66%        2MB  2.40%                | github.com/pingcap/tidb/executor.ResetContextOfStmt
+----------------------------------------------------------+-------------
+                                            2.50MB   100% |   github.com/pingcap/tidb/expression.BuildCastFunction
+    1.50MB  1.80% 54.46%     2.50MB  3.00%                | github.com/pingcap/tidb/expression.(*castAsStringFunctionClass).getFunction
+----------------------------------------------------------+-------------
+                                            1.50MB   100% |   github.com/pingcap/tidb/planner/core.buildPointUpdatePlan
+    1.50MB  1.80% 56.26%     1.50MB  1.80%                | github.com/pingcap/tidb/expression.ParamMarkerExpression
+----------------------------------------------------------+-------------
+    1.50MB  1.80% 58.06%        8MB  9.59%                | github.com/pingcap/tidb/server.(*TiDBContext).Prepare
+                                            4.50MB 56.25% |   github.com/pingcap/parser.yyParse
+----------------------------------------------------------+-------------
+                                               6MB   100% |   github.com/pingcap/tidb/planner/core.buildPointUpdatePlan
+    1.50MB  1.80% 59.85%        6MB  7.19%                | github.com/pingcap/tidb/expression.BuildCastFunction
+                                            2.50MB 41.67% |   github.com/pingcap/tidb/expression.(*castAsStringFunctionClass).getFunction
+                                               2MB 33.34% |   github.com/pingcap/tidb/expression.foldConstant
+----------------------------------------------------------+-------------
 ```
 
-### 3.3.4.1 TiDB profile of workload d
+![Workload a fire frame of memory](./profiles/ycsb/tidb/workloada/workload_a_mem.png)
 
-![YCSB workload d TiDB profile](./profiles/ycsb/tidb/d.svg)
+从profile中可以得到以下信息：
 
-### 3.3.4.2 分析
+1. 内存消耗主要集中在executor.CompileExecutePrepareStmt 41.96%
+2. 申请内存比较多又属于executor.CompileExecutePrepareStmt调用的子函数有
+    - core.buildSchemaFromFields
+    - core.buildPointUpdatePlan
 
-Workload d是95%的`Read`操作和5%的`Insert`操作组成的负载，从profile中可以得到以下信息：
+#### 3.3.1.3.3 IO
 
-1. 采样了120秒，采集样本73.17秒，TiDB的CPU使用率高达60.90%
-2. 相较于拥有等量`Update`操作的workload b，workload d的CPU使用率小幅下降，少量的`Insert`操作对`Read`操作的影响较明显
-3. 样本的时间消耗主要聚集在
+##### 3.3.1.3.3.1 磁盘性能
 
-### 3.3.4.3 结论
+![Workload a disk performance](./profiles/ycsb/tidb/workloada/a_disk_perf.png)
 
-### 3.3.5 Workload e
+##### 3.3.1.3.3.2 TiKV summary
 
-```bash
-# Yahoo! Cloud System Benchmark
-# Workload E: Short ranges
-#   Application example: threaded conversations, where each scan is for the posts in a given thread (assumed to be clustered by thread id)
-#                        
-#   Scan/insert ratio: 95/5
-#   Default data size: 1 KB records (10 fields, 100 bytes each, plus key)
-#   Request distribution: zipfian
+![Workload a tikv summart](./profiles/ycsb/tidb/workloada/a_tikv_summary.png)
 
-# The insert order is hashed, not ordered. Although the scans are ordered, it does not necessarily
-# follow that the data is inserted in order. For example, posts for thread 342 may not be inserted contiguously, but
-# instead interspersed with posts from lots of other threads. The way the YCSB client works is that it will pick a start
-# key, and then request a number of records; this works fine even for hashed insertion.
+![Workload a tikv network](./profiles/ycsb/tidb/workloada/a_tikv_net.png)
 
-recordcount=1000
-operationcount=1000
-workload=core
+根据以上监控数据可以得出：
 
-readallfields=true
+1. TiKV结点的负载很高
+2. IO利用率高
+3. 磁盘带宽非常低，应该大约等同于网络带宽
+4. 写入操作的IOPS非常高
 
-readproportion=0
-updateproportion=0
-scanproportion=0.95
-insertproportion=0.05
+### 3.3.3.1.4 结论
 
-requestdistribution=uniform
+Workload a是50%的`Read`操作和50%的`Update`操作组成的负载，在当前拓扑下IO开销占了不小比重，可能主要是由于设备磁盘性能的不足。在SQL计算程序上，对内存的管理或许还有优化空间。
 
-maxscanlength=1
+---
 
-scanlengthdistribution=uniform
-```
+### 3.3.2 Workload c
 
-### 3.3.5.1 TiDB profile of workload e
-
-![YCSB workload e TiDB profile](./profiles/ycsb/tidb/e.svg)
-
-### 3.3.5.2 分析
-
-Workload e是95%的`Scan`操作和5%的`Insert`操作组成的负载，从profile中可以得到以下信息：
-
-1. 采样了120秒，采集样本87.22秒，TiDB的CPU使用率高达72.57%
-2. 相较于拥有少量`Update`操作的workload b，workload c的CPU使用率非常相近，少量的`Update`操作对`Read`操作的影响很小
-3. 样本的时间消耗主要聚集在
-
-### 3.3.5.3 结论
-
-TODO
-
-### 3.3.6 Workload f
+#### 3.3.2.1 负载配置
 
 ```bash
-# Yahoo! Cloud System Benchmark
-# Workload F: Read-modify-write workload
-#   Application example: user database, where user records are read and modified by the user or to record user activity.
-#                        
-#   Read/read-modify-write ratio: 50/50
-#   Default data size: 1 KB records (10 fields, 100 bytes each, plus key)
-#   Request distribution: zipfian
-
-recordcount=1000
-operationcount=1000
-workload=core
-
-readallfields=true
-
-readproportion=0.5
-updateproportion=0
-scanproportion=0
-insertproportion=0
-readmodifywriteproportion=0.5
-
-requestdistribution=uniform
+"updateproportion"="0"
+"workload"="core"
+"recordcount"="1000"
+"readallfields"="true"
+"threadcount"="256"
+"requestdistribution"="uniform"
+"insertproportion"="0"
+"scanproportion"="0"
+"mysql.port"="4000"
+"dotransactions"="true"
+"operationcount"="1000000"
+"mysql.host"="192.168.99.101"
+"readproportion"="1"
 ```
 
-### 3.3.6.1 TiDB profile of workload f
+#### 3.3.2.2 压测结果
 
-![YCSB workload f TiDB profile](./profiles/ycsb/tidb/f.svg)
+```bash
+READ   - Takes(s): 399.5, Count: 999936, OPS: 2502.9, Avg(us): 97998, Min(us): 1923, Max(us): 20546032, 99th(us): 163000, 99.9th(us): 5863000, 99.99th(us): 20444000
+```
 
-### 3.3.6.2 分析
+### 3.3.2.3 分析
 
-Workload f是50%的`Read`操作和50%的`Read`+`Update`(readmodifywrite)操作组成的负载，从profile中可以得到以下信息：
+#### 3.3.2.3.1 CPU
 
-1. 采样了120秒，采集样本76.61秒，TiDB的CPU使用率高达63.68%
-2. 尽管`Update`操作占比不小，CPU使用率远高于workload a
-3. 样本的时间消耗主要聚集在
+```shell
+# 根据执行加调用外部函数时长逆序排列得到前15项函数
+go tool pprof -tree -cum -nodecount 15 profile
 
-### 3.3.6.3 结论
+Duration: 2mins, Total samples = 81.13s (67.53%)
+Showing nodes accounting for 30.08s, 37.08% of 81.13s total
+Dropped 803 nodes (cum <= 0.41s)
+Showing top 15 nodes out of 218
+----------------------------------------------------------+-------------
+      flat  flat%   sum%        cum   cum%   calls calls% + context 	 	 
+----------------------------------------------------------+-------------
+         0     0%     0%     63.28s 78.00%                | github.com/pingcap/tidb/server.(*Server).onConn
+                                            63.28s   100% |   github.com/pingcap/tidb/server.(*clientConn).Run
+----------------------------------------------------------+-------------
+                                            63.28s   100% |   github.com/pingcap/tidb/server.(*Server).onConn
+     0.12s  0.15%  0.15%     63.28s 78.00%                | github.com/pingcap/tidb/server.(*clientConn).Run
+                                            50.77s 80.23% |   github.com/pingcap/tidb/server.(*clientConn).dispatch
+                                            10.69s 16.89% |   syscall.Syscall
+----------------------------------------------------------+-------------
+                                            50.77s   100% |   github.com/pingcap/tidb/server.(*clientConn).Run
+     0.09s  0.11%  0.26%     50.77s 62.58%                | github.com/pingcap/tidb/server.(*clientConn).dispatch
+                                            50.13s 98.74% |   github.com/pingcap/tidb/server.(*clientConn).handleStmtExecute
+----------------------------------------------------------+-------------
+                                            50.13s   100% |   github.com/pingcap/tidb/server.(*clientConn).dispatch
+     0.08s 0.099%  0.36%     50.13s 61.79%                | github.com/pingcap/tidb/server.(*clientConn).handleStmtExecute
+                                            37.26s 74.33% |   github.com/pingcap/tidb/server.(*clientConn).writeResultset
+----------------------------------------------------------+-------------
+                                            37.26s   100% |   github.com/pingcap/tidb/server.(*clientConn).handleStmtExecute
+     0.06s 0.074%  0.43%     37.26s 45.93%                | github.com/pingcap/tidb/server.(*clientConn).writeResultset
+                                            19.36s 51.96% |   github.com/pingcap/tidb/server.(*clientConn).writeChunks
+                                            15.41s 41.36% |   github.com/pingcap/tidb/server.(*clientConn).flush
+----------------------------------------------------------+-------------
+                                            17.56s 59.49% |   syscall.write
+                                            10.69s 36.21% |   github.com/pingcap/tidb/server.(*clientConn).Run
+    29.06s 35.82% 36.25%     29.52s 36.39%                | syscall.Syscall
+----------------------------------------------------------+-------------
+                                            19.36s   100% |   github.com/pingcap/tidb/server.(*clientConn).writeResultset
+     0.25s  0.31% 36.56%     19.36s 23.86%                | github.com/pingcap/tidb/server.(*clientConn).writeChunks
+----------------------------------------------------------+-------------
+                                            15.23s 84.14% |   bufio.(*Writer).Flush
+     0.01s 0.012% 36.57%     18.10s 22.31%                | net.(*conn).Write
+                                            18.09s 99.94% |   net.(*netFD).Write
+----------------------------------------------------------+-------------
+                                            18.09s   100% |   net.(*conn).Write
+     0.19s  0.23% 36.81%     18.09s 22.30%                | net.(*netFD).Write
+                                            17.90s 98.95% |   internal/poll.(*FD).Write
+----------------------------------------------------------+-------------
+                                            17.90s   100% |   net.(*netFD).Write
+         0     0% 36.81%     17.90s 22.06%                | internal/poll.(*FD).Write
+                                            17.60s 98.32% |   syscall.Write
+----------------------------------------------------------+-------------
+                                            17.60s   100% |   internal/poll.(*FD).Write
+     0.02s 0.025% 36.83%     17.60s 21.69%                | syscall.Write
+                                            17.58s 99.89% |   syscall.write
+----------------------------------------------------------+-------------
+                                            17.58s   100% |   syscall.Write
+     0.02s 0.025% 36.85%     17.58s 21.67%                | syscall.write
+                                            17.56s 99.89% |   syscall.Syscall
+----------------------------------------------------------+-------------
+                                            15.38s 99.61% |   github.com/pingcap/tidb/server.(*packetIO).flush
+     0.15s  0.18% 37.04%     15.44s 19.03%                | bufio.(*Writer).Flush
+                                            15.23s 98.64% |   net.(*conn).Write
+----------------------------------------------------------+-------------
+                                            15.41s   100% |   github.com/pingcap/tidb/server.(*clientConn).writeResultset
+     0.03s 0.037% 37.08%     15.41s 18.99%                | github.com/pingcap/tidb/server.(*clientConn).flush
+                                            15.38s 99.81% |   github.com/pingcap/tidb/server.(*packetIO).flush
+----------------------------------------------------------+-------------
+                                            15.38s   100% |   github.com/pingcap/tidb/server.(*clientConn).flush
+         0     0% 37.08%     15.38s 18.96%                | github.com/pingcap/tidb/server.(*packetIO).flush
+                                            15.38s   100% |   bufio.(*Writer).Flush
+----------------------------------------------------------+-------------
+```
 
-TODO
+```shell
+# 根据执行时长逆序排列得到15项函数
+go tool pprof -tree -flat -nodecount 15 profile
+
+Duration: 2mins, Total samples = 81.13s (67.53%)
+Showing nodes accounting for 43.38s, 53.47% of 81.13s total
+Dropped 803 nodes (cum <= 0.41s)
+Showing top 15 nodes out of 218
+----------------------------------------------------------+-------------
+      flat  flat%   sum%        cum   cum%   calls calls% + context 	 	 
+----------------------------------------------------------+-------------
+    29.06s 35.82% 35.82%     29.52s 36.39%                | syscall.Syscall
+----------------------------------------------------------+-------------
+     2.29s  2.82% 38.64%      2.29s  2.82%                | runtime.memmove
+----------------------------------------------------------+-------------
+                                             2.07s 63.30% |   runtime.mallocgc
+     1.81s  2.23% 40.87%      3.27s  4.03%                | runtime.scanobject
+                                             0.70s 21.41% |   runtime.findObject
+----------------------------------------------------------+-------------
+                                             5.76s 64.29% |   runtime.newobject
+     1.70s  2.10% 42.97%      8.96s 11.04%                | runtime.mallocgc
+                                             2.07s 23.10% |   runtime.scanobject
+                                             1.35s 15.07% |   runtime.heapBitsSetType
+                                             1.04s 11.61% |   runtime.memclrNoHeapPointers
+                                             0.94s 10.49% |   runtime.nextFreeFast
+----------------------------------------------------------+-------------
+                                             1.04s 93.69% |   runtime.mallocgc
+     1.11s  1.37% 44.34%      1.11s  1.37%                | runtime.memclrNoHeapPointers
+----------------------------------------------------------+-------------
+                                             1.35s   100% |   runtime.mallocgc
+     1.05s  1.29% 45.63%      1.35s  1.66%                | runtime.heapBitsSetType
+----------------------------------------------------------+-------------
+                                             0.94s   100% |   runtime.mallocgc
+     0.94s  1.16% 46.79%      0.94s  1.16%                | runtime.nextFreeFast
+----------------------------------------------------------+-------------
+     0.86s  1.06% 47.85%      6.62s  8.16%                | runtime.newobject
+                                             5.76s 87.01% |   runtime.mallocgc
+----------------------------------------------------------+-------------
+                                             0.70s 77.78% |   runtime.scanobject
+     0.80s  0.99% 48.84%      0.90s  1.11%                | runtime.findObject
+----------------------------------------------------------+-------------
+     0.79s  0.97% 49.81%      0.85s  1.05%                | time.now
+----------------------------------------------------------+-------------
+     0.76s  0.94% 50.75%      2.26s  2.79%                | runtime.selectgo
+                                             0.38s 16.81% |   runtime.lock
+----------------------------------------------------------+-------------
+                                             0.38s 55.88% |   runtime.selectgo
+     0.68s  0.84% 51.58%      0.68s  0.84%                | runtime.lock
+----------------------------------------------------------+-------------
+     0.56s  0.69% 52.27%      0.58s  0.71%                | runtime.(*itabTableType).find
+----------------------------------------------------------+-------------
+     0.49s   0.6% 52.88%      0.51s  0.63%                | context.(*valueCtx).Value
+----------------------------------------------------------+-------------
+     0.48s  0.59% 53.47%      0.86s  1.06%                | runtime.mapaccess2
+----------------------------------------------------------+-------------
+
+```
+
+![Workload c fire frame with filter syscall.Syscall](./profiles/ycsb/tidb/workloadc/workload_c_syscall.png)
+
+从profile中可以得到以下信息：
+
+#### 3.3.2.3.2 内存
+
+```shell
+# 根据执行申请内存逆序排列得到15项函数
+go tool pprof -nodecount 15 -flat -tree heap
+
+Showing nodes accounting for 28012.69kB, 75.19% of 37253.83kB total
+Showing top 15 nodes out of 230
+----------------------------------------------------------+-------------
+      flat  flat%   sum%        cum   cum%   calls calls% + context 	 	 
+----------------------------------------------------------+-------------
+ 6866.17kB 18.43% 18.43%  6866.17kB 18.43%                | github.com/pingcap/tidb/util/arena.NewAllocator
+----------------------------------------------------------+-------------
+ 5200.42kB 13.96% 32.39%  5200.42kB 13.96%                | bufio.NewReaderSize
+----------------------------------------------------------+-------------
+ 3632.45kB  9.75% 42.14%  3632.45kB  9.75%                | github.com/pingcap/parser.New
+----------------------------------------------------------+-------------
+ 2600.21kB  6.98% 49.12%  2600.21kB  6.98%                | bufio.NewWriterSize
+----------------------------------------------------------+-------------
+ 1536.16kB  4.12% 53.24%  1536.16kB  4.12%                | github.com/pingcap/parser.yyParse
+----------------------------------------------------------+-------------
+ 1024.31kB  2.75% 55.99%  1024.31kB  2.75%                | github.com/pingcap/tidb/planner/core.getIndexValues
+----------------------------------------------------------+-------------
+ 1024.22kB  2.75% 58.74%  1024.22kB  2.75%                | fmt.Sprintf
+----------------------------------------------------------+-------------
+ 1024.15kB  2.75% 61.49%  2048.26kB  5.50%                | github.com/pingcap/tidb/statistics.PseudoTable
+                                         1024.11kB 50.00% |   github.com/pingcap/tidb/util/chunk.newFixedLenColumn
+----------------------------------------------------------+-------------
+                                         1024.11kB   100% |   github.com/pingcap/tidb/statistics.PseudoTable
+ 1024.11kB  2.75% 64.24%  1024.11kB  2.75%                | github.com/pingcap/tidb/util/chunk.newFixedLenColumn
+----------------------------------------------------------+-------------
+ 1024.05kB  2.75% 66.99%  1024.05kB  2.75%                | container/list.(*List).insertValue
+----------------------------------------------------------+-------------
+  902.59kB  2.42% 69.41%  1447.25kB  3.88%                | compress/flate.NewWriter
+                                          544.67kB 37.63% |   compress/flate.(*compressor).initDeflate
+----------------------------------------------------------+-------------
+                                          544.67kB   100% |   compress/flate.NewWriter
+  544.67kB  1.46% 70.87%   544.67kB  1.46%                | compress/flate.(*compressor).initDeflate
+----------------------------------------------------------+-------------
+  544.67kB  1.46% 72.34%   544.67kB  1.46%                | google.golang.org/grpc/internal/transport.newBufWriter
+----------------------------------------------------------+-------------
+  536.37kB  1.44% 73.78%   536.37kB  1.44%                | bytes.makeSlice
+----------------------------------------------------------+-------------
+  528.17kB  1.42% 75.19%   528.17kB  1.42%                | github.com/pingcap/tidb/types.BinaryLiteral.ToString
+----------------------------------------------------------+-------------
+```
+
+![Workload c fire frame of memory](./profiles/ycsb/tidb/workloadc/workload_c_mem.png)
+
+从profile中可以得到以下信息：
+
+#### 3.3.2.3.3 IO
+
+##### 3.3.2.3.3.1 磁盘性能
+
+![Workload c disk performance](./profiles/ycsb/tidb/workloadc/c_disk_perf.png)
+
+##### 3.3.2.3.3.2 TiKV summary
+
+![Workload c tikv summart](./profiles/ycsb/tidb/workloadc/c_tikv_summary.png)
+
+![Workload c tikv network](./profiles/ycsb/tidb/workloadc/c_tikv_net.png)
+
+### 3.3.2.4 结论
+
+Workload c是100%的`Read`操作的负载，QPS相较于workload a大幅提升。
+
+---
+
+### 3.3.3 Workload e
+
+#### 3.3.3.1 负载配置
+
+```bash
+
+```
+
+#### 3.3.3.2 压测结果
+
+```bash
+
+```
+
+### 3.3.43 TiDB profile of workload e
+
+
+### 3.3.4.4 分析
+
+
+### 3.3.4.5 结论
+
+Workload e是95%的`Scan`操作和5%的`Insert`操作组成的负载
 
 ## 4. 总结
 
