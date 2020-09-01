@@ -179,7 +179,7 @@ UPDATE - Takes(s): 211.6, Count: 114645, OPS: 541.9, Avg(us): 347580, Min(us): 8
 
 ### 3.3.1.1 TiDB profile of workload a
 
-![YCSB workload a TiDB profile](./profiles/ycsb/tidb/a.svg)
+![YCSB workload a TiDB profile](./profiles/ycsb/tidb/workloada/profile001.svg)
 
 ### 3.3.1.2 分析
 
